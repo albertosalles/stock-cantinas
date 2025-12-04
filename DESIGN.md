@@ -20,30 +20,21 @@ El diseño está inspirado en los colores oficiales del Elche CF:
 
 ### Barra Superior
 - **Fondo**: Gradiente verde (`#00964f` → `#007a3d`)
-- **Posición**: Sticky (fija al hacer scroll)
 - **Contenido**: 
   - Nombre del evento (grande y destacado)
   - Nombre de la cantina con icono de ubicación 📍
   - Navegación por pestañas (Venta, Inventario, Ventas)
 - **Efectos**: Sombra suave, backdrop blur en las pestañas
 
-### Página Principal (`/`)
-- **Layout**: Centrado con max-width de 1400px
-- **Tarjeta principal**: Fondo blanco con sombra suave y bordes redondeados (24px)
-- **Botón de cantina**: Gradiente verde con efecto hover (elevación)
-- **Panel informativo**: Fondo gris claro con borde verde izquierdo
-
 ### Página POS (`/pos`)
 
 #### Pestaña de Venta
-- **Layout**: Grid de 2 columnas (productos + carrito)
 - **Tarjetas de productos**:
   - Fondo blanco con sombra suave
   - Bordes redondeados (16px)
   - Hover: Borde verde con elevación
   - Indicadores de stock con puntos de color
-- **Carrito lateral**:
-  - Sticky positioning
+- **Carrito**:
   - Fondo blanco
   - Items con fondo gris claro
   - Botón de venta con gradiente verde
@@ -68,25 +59,7 @@ El diseño está inspirado en los colores oficiales del Elche CF:
 - **Grande**: 16px (cards, botones principales)
 - **Extra grande**: 24px (contenedores principales)
 
-### Padding
-- **Pequeño**: 8-10px
-- **Mediano**: 12-16px
-- **Grande**: 20-24px
-- **Extra grande**: 32-48px
 
-### Gap (espaciado entre elementos)
-- **Pequeño**: 8px
-- **Mediano**: 12px
-- **Grande**: 16px
-- **Extra grande**: 20px
-
-## 🔤 Tipografía
-
-- **Fuente**: Inter (Google Fonts)
-- **Títulos principales**: 24-28px, peso 800
-- **Títulos secundarios**: 18-20px, peso 700
-- **Texto normal**: 14-16px, peso 400-600
-- **Texto pequeño**: 13-14px, peso 400-600
 
 ## ✨ Efectos y Animaciones
 
@@ -108,13 +81,6 @@ linear-gradient(135deg, var(--elche-green) 0%, var(--elche-green-light) 100%)
 /* Barra superior */
 linear-gradient(135deg, var(--elche-green) 0%, var(--elche-green-dark) 100%)
 ```
-
-## 📱 Responsive
-
-El diseño está optimizado para pantallas grandes (desktop), con:
-- Max-width: 1600px en POS
-- Max-width: 1400px en página principal
-- Grid adaptativo con `auto-fill` y `minmax()`
 
 ## 🎭 Iconos y Emojis
 

@@ -1,442 +1,110 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import { useRouter } from 'next/navigation';
-
-type Event = {
-  id: string;
-  name: string;
-  date: string;
-  cantinas_count: number;
-};
-
-type Cantina = {
-  event_id: string;
-  event_name: string;
-  cantina_id: string;
-  cantina_name: string;
-  cantina_location: string;
-  access_enabled: boolean;
-  has_credentials: boolean;
-};
+import { useLogin } from './hooks/useLogin';
+import EventSelector from './components/EventSelector';
+import CantinaSelector from './components/CantinaSelector';
+import PinInput from './components/PinInput';
 
 export default function CantinaLoginPage() {
-  const router = useRouter();
-  const [step, setStep] = useState<'event' | 'cantina' | 'pin'>('event');
-  const [events, setEvents] = useState<Event[]>([]);
-  const [cantinas, setCantinas] = useState<Cantina[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [selectedCantina, setSelectedCantina] = useState<Cantina | null>(null);
-  const [pin, setPin] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  // Cargar eventos activos
-  useEffect(() => {
-    loadActiveEvents();
-  }, []);
-
-  async function loadActiveEvents() {
-    try {
-      const { data, error } = await supabase.rpc('get_active_events');
-      if (error) throw error;
-      setEvents(data || []);
-    } catch (e: any) {
-      console.error('Error loading events:', e);
-      setError('No se pudieron cargar los eventos activos');
-    }
-  }
-
-  // Cargar cantinas del evento seleccionado
-  async function loadCantinas(eventId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('v_available_cantinas')
-        .select('*')
-        .eq('event_id', eventId);
-      
-      if (error) throw error;
-      setCantinas(data || []);
-    } catch (e: any) {
-      console.error('Error loading cantinas:', e);
-      setError('No se pudieron cargar las cantinas');
-    }
-  }
-
-  function handleEventSelect(event: Event) {
-    setSelectedEvent(event);
-    setError('');
-    loadCantinas(event.id);
-    setStep('cantina');
-  }
-
-  function handleCantinaSelect(cantina: Cantina) {
-    setSelectedCantina(cantina);
-    setError('');
-    setStep('pin');
-  }
-
-  async function handleLogin() {
-    if (!selectedEvent || !selectedCantina || !pin) return;
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const { data, error } = await supabase.rpc('validate_cantina_access', {
-        p_event_id: selectedEvent.id,
-        p_cantina_id: selectedCantina.cantina_id,
-        p_pin_code: pin
-      });
-
-      if (error) throw error;
-
-      const result = data[0];
-      
-      if (result.success) {
-        // Guardar en localStorage
-        localStorage.setItem('cantina_session', JSON.stringify({
-          eventId: selectedEvent.id,
-          eventName: result.event_name,
-          cantinaId: selectedCantina.cantina_id,
-          cantinaName: result.cantina_name,
-          loginTime: new Date().toISOString()
-        }));
-
-        // Redirigir al POS
-        router.push('/pos');
-      } else {
-        setError(result.message || 'Acceso denegado');
-      }
-    } catch (e: any) {
-      console.error('Login error:', e);
-      setError(e.message || 'Error al iniciar sesión');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleBack() {
-    setError('');
-    if (step === 'pin') {
-      setStep('cantina');
-      setPin('');
-    } else if (step === 'cantina') {
-      setStep('event');
-      setSelectedEvent(null);
-      setCantinas([]);
-    }
-  }
+  const {
+    step,
+    events,
+    cantinas,
+    selectedEvent,
+    selectedCantina,
+    pin,
+    setPin,
+    loading,
+    error,
+    selectEvent,
+    selectCantina,
+    goBack,
+    login
+  } = useLogin();
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--elche-bg)' }}>
-      {/* Barra superior */}
-      <header style={{
-        background: 'linear-gradient(135deg, var(--elche-green) 0%, var(--elche-green-dark) 100%)',
-        color: 'white',
-        padding: '20px 32px',
-        boxShadow: '0 2px 8px rgba(0, 150, 79, 0.2)'
-      }}>
-        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <h1 style={{ fontSize: '28px', fontWeight: '800', marginBottom: '4px' }}>
-            🏪 Acceso Cantina
+    <div className="min-h-screen bg-elche-bg flex flex-col items-center justify-center p-4 font-sans">
+      {/* Contenido centrado */}
+      <div className="w-full max-w-[500px]">
+        
+        {/* Logo / Header */}
+        <div className="text-center mb-8 animate-in fade-in slide-in-from-top-8 duration-500">
+          <div className="w-20 h-20 bg-gradient-to-br from-elche-primary to-elche-secondary rounded-3xl mx-auto mb-4 flex items-center justify-center shadow-xl shadow-elche-primary/20 transform rotate-3 hover:rotate-0 transition-transform duration-300">
+            <span className="text-4xl drop-shadow-sm">🏪</span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-elche-text mb-2 tracking-tight">
+            Stock Cantinas
           </h1>
-          <p style={{ opacity: 0.9, fontSize: '14px' }}>
+          <p className="text-elche-text-light font-medium text-sm bg-white/50 px-3 py-1 rounded-full inline-block backdrop-blur-sm">
             Sistema de gestión — Elche CF
           </p>
         </div>
-      </header>
 
-      {/* Contenido */}
-      <main style={{ maxWidth: '600px', margin: '0 auto', padding: '48px 32px' }}>
-        <div style={{
-          background: 'white',
-          borderRadius: '24px',
-          padding: '40px',
-          boxShadow: '0 4px 24px rgba(0, 150, 79, 0.08)'
-        }}>
+        <div className="bg-white rounded-[32px] p-6 md:p-8 shadow-[0_8px_40px_rgba(0,150,79,0.08)] border border-elche-border/60 relative overflow-hidden backdrop-blur-xl">
+          
+          {/* Barra de progreso superior */}
+          <div className="absolute top-0 left-0 h-1.5 bg-elche-gray w-full">
+            <div 
+              className="h-full bg-elche-primary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(0,150,79,0.5)]"
+              style={{ width: step === 'event' ? '33%' : step === 'cantina' ? '66%' : '100%' }}
+            />
+          </div>
+
           {/* Breadcrumb */}
-          <div style={{ 
-            display: 'flex', 
-            gap: 12, 
-            marginBottom: 32,
-            fontSize: 14,
-            color: 'var(--elche-text-light)'
-          }}>
-            <span style={{ color: step === 'event' ? 'var(--elche-green)' : undefined, fontWeight: step === 'event' ? 600 : 400 }}>
-              1. Evento
-            </span>
-            <span>→</span>
-            <span style={{ color: step === 'cantina' ? 'var(--elche-green)' : undefined, fontWeight: step === 'cantina' ? 600 : 400 }}>
-              2. Cantina
-            </span>
-            <span>→</span>
-            <span style={{ color: step === 'pin' ? 'var(--elche-green)' : undefined, fontWeight: step === 'pin' ? 600 : 400 }}>
-              3. PIN
-            </span>
+          <div className="flex justify-center gap-2 mb-8 text-[11px] font-bold uppercase tracking-widest text-elche-text-light/60 select-none">
+            <span className={`transition-colors duration-300 ${step === 'event' ? 'text-elche-primary' : ''}`}>1. Evento</span>
+            <span className="text-elche-gray">•</span>
+            <span className={`transition-colors duration-300 ${step === 'cantina' ? 'text-elche-primary' : ''}`}>2. Cantina</span>
+            <span className="text-elche-gray">•</span>
+            <span className={`transition-colors duration-300 ${step === 'pin' ? 'text-elche-primary' : ''}`}>3. Acceso</span>
           </div>
 
           {/* Error message */}
           {error && (
-            <div style={{
-              background: '#fee',
-              border: '2px solid #fcc',
-              borderRadius: 12,
-              padding: 16,
-              marginBottom: 24,
-              color: '#c00',
-              fontSize: 14
-            }}>
-              ⚠️ {error}
+            <div className="bg-red-50 border border-red-100 rounded-2xl p-4 mb-6 text-red-600 text-sm font-bold flex items-center gap-3 animate-in zoom-in-95 duration-200">
+              <span className="text-lg bg-white rounded-full w-8 h-8 flex items-center justify-center shadow-sm">⚠️</span> 
+              {error}
             </div>
           )}
 
-          {/* Paso 1: Seleccionar evento */}
+          {/* Steps */}
           {step === 'event' && (
-            <>
-              <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 16, color: 'var(--elche-text)' }}>
-                Selecciona el evento
-              </h2>
-              {events.length === 0 ? (
-                <div style={{ 
-                  textAlign: 'center', 
-                  padding: '40px 20px', 
-                  color: 'var(--elche-text-light)' 
-                }}>
-                  No hay eventos activos en este momento
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gap: 12 }}>
-                  {events.map(event => (
-                    <button
-                      key={event.id}
-                      onClick={() => handleEventSelect(event)}
-                      style={{
-                        padding: 20,
-                        borderRadius: 12,
-                        border: '2px solid var(--elche-gray)',
-                        background: 'white',
-                        textAlign: 'left',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--elche-green)';
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--elche-gray)';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--elche-text)', marginBottom: 6 }}>
-                        {event.name}
-                      </div>
-                      <div style={{ fontSize: 13, color: 'var(--elche-text-light)' }}>
-                        📅 {new Date(event.date).toLocaleDateString('es-ES', { 
-                          day: 'numeric', 
-                          month: 'long', 
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </div>
-                      <div style={{ fontSize: 13, color: 'var(--elche-text-light)', marginTop: 4 }}>
-                        🏪 {event.cantinas_count} cantina{event.cantinas_count !== 1 ? 's' : ''}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
+            <EventSelector 
+              events={events} 
+              onSelect={selectEvent} 
+            />
           )}
 
-          {/* Paso 2: Seleccionar cantina */}
           {step === 'cantina' && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--elche-text)' }}>
-                  Selecciona tu cantina
-                </h2>
-                <button
-                  onClick={handleBack}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: 8,
-                    background: 'var(--elche-gray)',
-                    color: 'var(--elche-text)',
-                    fontWeight: 600,
-                    fontSize: 14
-                  }}>
-                  ← Volver
-                </button>
-              </div>
-              <div style={{ 
-                padding: 12, 
-                background: 'var(--elche-gray)', 
-                borderRadius: 12, 
-                marginBottom: 24,
-                fontSize: 14,
-                color: 'var(--elche-text-light)'
-              }}>
-                Evento: <strong>{selectedEvent?.name}</strong>
-              </div>
-              {cantinas.length === 0 ? (
-                <div style={{ 
-                  textAlign: 'center', 
-                  padding: '40px 20px', 
-                  color: 'var(--elche-text-light)' 
-                }}>
-                  No hay cantinas disponibles para este evento
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gap: 12 }}>
-                  {cantinas.map(cantina => (
-                    <button
-                      key={cantina.cantina_id}
-                      onClick={() => handleCantinaSelect(cantina)}
-                      disabled={!cantina.has_credentials || !cantina.access_enabled}
-                      style={{
-                        padding: 20,
-                        borderRadius: 12,
-                        border: '2px solid var(--elche-gray)',
-                        background: (!cantina.has_credentials || !cantina.access_enabled) ? 'var(--elche-gray)' : 'white',
-                        textAlign: 'left',
-                        opacity: (!cantina.has_credentials || !cantina.access_enabled) ? 0.5 : 1,
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (cantina.has_credentials && cantina.access_enabled) {
-                          e.currentTarget.style.borderColor = 'var(--elche-green)';
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--elche-gray)';
-                        e.currentTarget.style.transform = 'translateY(0)';
-                      }}>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--elche-text)', marginBottom: 6 }}>
-                        {cantina.cantina_name}
-                      </div>
-                      {cantina.cantina_location && (
-                        <div style={{ fontSize: 13, color: 'var(--elche-text-light)' }}>
-                          📍 {cantina.cantina_location}
-                        </div>
-                      )}
-                      {!cantina.has_credentials && (
-                        <div style={{ fontSize: 12, color: '#c00', marginTop: 6 }}>
-                          ⚠️ Sin credenciales configuradas
-                        </div>
-                      )}
-                      {cantina.has_credentials && !cantina.access_enabled && (
-                        <div style={{ fontSize: 12, color: '#c00', marginTop: 6 }}>
-                          ⚠️ Acceso deshabilitado
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
+            <CantinaSelector 
+              cantinas={cantinas} 
+              selectedEvent={selectedEvent} 
+              onSelect={selectCantina} 
+              onBack={goBack} 
+            />
           )}
 
-          {/* Paso 3: Ingresar PIN */}
           {step === 'pin' && (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--elche-text)' }}>
-                  Código de acceso
-                </h2>
-                <button
-                  onClick={handleBack}
-                  style={{
-                    padding: '8px 16px',
-                    borderRadius: 8,
-                    background: 'var(--elche-gray)',
-                    color: 'var(--elche-text)',
-                    fontWeight: 600,
-                    fontSize: 14
-                  }}>
-                  ← Volver
-                </button>
-              </div>
-              <div style={{ 
-                padding: 12, 
-                background: 'var(--elche-gray)', 
-                borderRadius: 12, 
-                marginBottom: 24,
-                fontSize: 14,
-                color: 'var(--elche-text-light)'
-              }}>
-                <div>Evento: <strong>{selectedEvent?.name}</strong></div>
-                <div>Cantina: <strong>{selectedCantina?.cantina_name}</strong></div>
-              </div>
-
-              <div style={{ marginBottom: 24 }}>
-                <label style={{ 
-                  display: 'block', 
-                  fontSize: 14, 
-                  fontWeight: 600, 
-                  marginBottom: 8,
-                  color: 'var(--elche-text)'
-                }}>
-                  Introduce el código PIN
-                </label>
-                <input
-                  type="password"
-                  value={pin}
-                  onChange={(e) => setPin(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && pin) {
-                      handleLogin();
-                    }
-                  }}
-                  placeholder="****"
-                  autoFocus
-                  style={{
-                    width: '100%',
-                    padding: '16px',
-                    fontSize: 24,
-                    textAlign: 'center',
-                    letterSpacing: 8,
-                    borderRadius: 12,
-                    border: '2px solid var(--elche-gray)',
-                    fontWeight: 700
-                  }}
-                />
-              </div>
-
-              <button
-                onClick={handleLogin}
-                disabled={!pin || loading}
-                style={{
-                  width: '100%',
-                  padding: '16px',
-                  borderRadius: 12,
-                  background: loading ? 'var(--elche-gray)' : 'linear-gradient(135deg, var(--elche-green) 0%, var(--elche-green-light) 100%)',
-                  color: 'white',
-                  fontWeight: 700,
-                  fontSize: 16,
-                  boxShadow: '0 4px 16px rgba(0, 150, 79, 0.3)'
-                }}>
-                {loading ? '⏳ Validando...' : '🔓 Iniciar sesión'}
-              </button>
-            </>
+            <PinInput 
+              selectedEvent={selectedEvent} 
+              selectedCantina={selectedCantina} 
+              pin={pin} 
+              loading={loading} 
+              onPinChange={setPin} 
+              onLogin={login} 
+              onBack={goBack} 
+            />
           )}
+
         </div>
 
-        {/* Info */}
-        <div style={{
-          marginTop: 24,
-          padding: 16,
-          background: 'white',
-          borderRadius: 12,
-          fontSize: 13,
-          color: 'var(--elche-text-light)',
-          textAlign: 'center'
-        }}>
-          💡 Si no tienes acceso, contacta con el administrador del evento
+        {/* Footer Info */}
+        <div className="mt-8 text-center animate-in fade-in delay-300 duration-500">
+          <p className="text-xs text-elche-text-light/80 font-medium bg-white/40 py-2.5 px-5 rounded-2xl inline-block backdrop-blur-md border border-white/50 shadow-sm hover:bg-white/60 transition-colors cursor-help">
+            💡 Si tienes problemas de acceso, contacta con administración
+          </p>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -1,11 +1,10 @@
 @import "tailwindcss";
+@config "../tailwind.config.ts";
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  /* Colores Elche CF */
+/*
+  Elche CF Color Palette (Reference)
+  Defined in tailwind.config.ts as 'elche-...'
+  
   --elche-green: #00964f;
   --elche-green-dark: #007a3d;
   --elche-green-light: #20b368;
@@ -14,68 +13,10 @@
   --elche-gray: #e8f4ee;
   --elche-text: #1a2e1f;
   --elche-text-light: #4a5f52;
-  
-  --background: var(--elche-bg);
-  --foreground: var(--elche-text);
-}
+*/
 
 html,
 body {
-  max-width: 100vw;
-  overflow-x: hidden;
-}
-
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-* {
-  box-sizing: border-box;
-  padding: 0;
-  margin: 0;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-/* Estilos para botones principales */
-button {
-  cursor: pointer;
-  border: none;
-  background: var(--elche-white);
-  color: var(--elche-text);
-  transition: all 0.2s ease;
-  font-family: inherit;
-}
-
-button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 150, 79, 0.15);
-}
-
-button:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-input, select {
-  font-family: inherit;
-  border: 1px solid var(--elche-gray);
-  background: var(--elche-white);
-  color: var(--elche-text);
-}
-
-input:focus, select:focus {
-  outline: 2px solid var(--elche-green);
-  border-color: var(--elche-green);
+  background-color: #f5f9f7; /* elche-bg */
+  color: #1a2e1f; /* elche-text */
 }
