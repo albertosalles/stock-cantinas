@@ -19,7 +19,8 @@ export default function PosSalesTab({ products, invMap, cart, totalEur, onAddOne
   return (
     <section className="grid grid-cols-1 md:grid-cols-[1fr_380px] gap-5 pb-32 md:pb-0">
       {/* Productos Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3 md:gap-4 content-start">
+
+      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-2 content-start">
         {products.map((p) => (
           <ProductCard
             key={p.id}
@@ -31,7 +32,7 @@ export default function PosSalesTab({ products, invMap, cart, totalEur, onAddOne
       </div>
 
       {/* Carrito Desktop */}
-      <CartSidebar 
+      <CartSidebar
         cart={cart}
         products={products}
         totalEur={totalEur}
