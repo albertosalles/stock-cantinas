@@ -5,11 +5,12 @@ interface EventCantinasTabProps {
   cantinas: CantinaRow[];
   loading: boolean;
   onToggle: (id: string, assigned: boolean) => void;
-  onCreate: (name: string) => void;
+  onCreate: (name: string, pin: string) => void;
 }
 
 export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate }: EventCantinasTabProps) {
   const [newName, setNewName] = useState('');
+  const [newPin, setNewPin] = useState('');
 
   return (
     <section className="bg-white p-6 rounded-3xl shadow-sm border border-elche-gray/50">
@@ -17,10 +18,10 @@ export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate
         <span className="bg-elche-primary/10 p-2 rounded-xl text-elche-primary">🏪</span>
         Cantinas asignadas
       </div>
-      
+
       {loading ? (
         <div className="p-10 text-center text-elche-text-light flex flex-col items-center gap-2">
-          <div className="w-6 h-6 border-2 border-elche-primary border-t-transparent rounded-full animate-spin"/>
+          <div className="w-6 h-6 border-2 border-elche-primary border-t-transparent rounded-full animate-spin" />
           Cargando cantinas...
         </div>
       ) : (
@@ -58,9 +59,16 @@ export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate
                 onChange={e => setNewName(e.target.value)}
                 className="flex-1 p-3 rounded-xl border border-elche-gray bg-white focus:outline-none focus:ring-2 focus:ring-elche-primary"
               />
+              <input
+                type="text"
+                placeholder="PIN"
+                value={newPin}
+                onChange={e => setNewPin(e.target.value)}
+                className="w-24 p-3 rounded-xl border border-elche-gray bg-white focus:outline-none focus:ring-2 focus:ring-elche-primary text-center font-mono"
+              />
               <button
-                onClick={() => { onCreate(newName); setNewName(''); }}
-                disabled={!newName.trim()}
+                onClick={() => { onCreate(newName, newPin); setNewName(''); setNewPin(''); }}
+                disabled={!newName.trim() || !newPin.trim()}
                 className="px-5 py-3 rounded-xl bg-elche-text text-white font-bold shadow-sm hover:bg-elche-primary transition-colors disabled:opacity-50 disabled:shadow-none"
               >
                 Crear y Asignar

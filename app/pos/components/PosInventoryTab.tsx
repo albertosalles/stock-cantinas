@@ -13,7 +13,7 @@ interface PosInventoryTabProps {
 
 export default function PosInventoryTab({ eventId, cantinaId, userId, products, inventory, onRefresh }: PosInventoryTabProps) {
   // --- Estados Locales ---
-  const [initForm, setInitForm] = useState<Record<string, number>>({});
+  const [initForm, setInitForm] = useState<Record<string, number | ''>>({});
   
   const [adjustForm, setAdjustForm] = useState<Record<string, number>>({});
   const [adjustType, setAdjustType] = useState<'ADJUSTMENT'|'WASTE'|'TRANSFER_IN'|'TRANSFER_OUT'|'RETURN'>('ADJUSTMENT');
@@ -35,10 +35,10 @@ export default function PosInventoryTab({ eventId, cantinaId, userId, products, 
         .eq('kind','INITIAL');
       
       const rows = data ?? [];
-      const map: Record<string, number> = {};
+      const map: Record<string, number | ''> = {};
       products.forEach(p => {
         const found = rows.find((r: any) => r.product_id === p.id);
-        map[p.id] = found?.qty ?? 0;
+        map[p.id] = found ? found.qty : '';
       });
       setInitForm(map);
     })();
@@ -58,7 +58,17 @@ export default function PosInventoryTab({ eventId, cantinaId, userId, products, 
   // --- Handlers ---
 
   const saveInitial = async () => {
-    const lines = Object.entries(initForm).map(([productId, qty]) => ({ productId, qty }));
+    // FILTRAR: solo enviamos los productos que tengan un número válido (incluido 0).
+    // Los vacíos ('') se ignoran para no sobrescribir lo que otro usuario no haya tocado.
+    const lines = Object.entries(initForm)
+      .filter(([_, qty]) => qty !== '')
+      .map(([productId, qty]) => ({ productId, qty: Number(qty) }));
+
+    if (lines.length === 0) {
+        alert('No hay datos para guardar (campos vacíos se ignoran).');
+        return;
+    }
+
     const { error } = await supabase.rpc('set_initial_inventory_bulk', {
       p_event_id: eventId, p_cantina_id: cantinaId, p_user_id: userId, p_lines: lines
     });
@@ -103,6 +113,13 @@ export default function PosInventoryTab({ eventId, cantinaId, userId, products, 
   const incDelta = (pid: string, step=1) => setAdjustForm(s => ({ ...s, [pid]: (s[pid]??0) + step }));
   const decDelta = (pid: string, step=1) => setAdjustForm(s => ({ ...s, [pid]: (s[pid]??0) - step }));
 
+  // Helper para inventario inicial
+  const setInitVal = (pid: string, val: string | number) => {
+      setInitForm(s => ({ ...s, [pid]: val === '' ? '' : Number(val) }));
+  };
+  const incInit = (pid: string) => setInitForm(s => ({...s, [pid]: ((s[pid] === '' ? 0 : s[pid]) as number) + 1 }));
+  const decInit = (pid: string) => setInitForm(s => ({...s, [pid]: Math.max(0, ((s[pid] === '' ? 0 : s[pid]) as number) - 1) }));
+
   return (
     <section className="grid gap-6 pb-24 md:pb-0">
       
@@ -113,7 +130,7 @@ export default function PosInventoryTab({ eventId, cantinaId, userId, products, 
         </div>
         <div className="grid gap-3">
           {products.map(p => {
-            const value = initForm[p.id] ?? 0;
+            const value = initForm[p.id] ?? '';
             return (
               <div key={p.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 bg-elche-gray/30 rounded-2xl border border-elche-border/50 gap-3 hover:border-elche-primary/20 transition-colors">
                 <div>
@@ -124,17 +141,18 @@ export default function PosInventoryTab({ eventId, cantinaId, userId, products, 
                 </div>
                 <div className="flex items-center gap-2 self-end md:self-auto bg-white p-1.5 rounded-xl border border-elche-border/50 shadow-sm">
                    <button 
-                      onClick={() => setInitForm(s => ({ ...s, [p.id]: Math.max(0, (s[p.id]||0) - 1) }))}
+                      onClick={() => decInit(p.id)}
                       className="w-9 h-9 rounded-lg bg-elche-gray/20 text-elche-text font-bold active:scale-90 transition-transform flex items-center justify-center text-lg hover:bg-elche-gray/40">
                       −
                    </button>
                   <input
                     type="number" min={0} value={value}
-                    onChange={e => setInitForm(s => ({ ...s, [p.id]: parseInt(e.target.value || '0', 10) }))}
-                    className="w-16 h-9 text-center font-bold border-none rounded-lg bg-transparent focus:ring-0 p-0 text-lg"
+                    placeholder="-"
+                    onChange={e => setInitVal(p.id, e.target.value)}
+                    className="w-16 h-9 text-center font-bold border-none rounded-lg bg-transparent focus:ring-0 p-0 text-lg placeholder-gray-300"
                   />
                    <button 
-                      onClick={() => setInitForm(s => ({ ...s, [p.id]: (s[p.id]||0) + 1 }))}
+                      onClick={() => incInit(p.id)}
                       className="w-9 h-9 rounded-lg bg-elche-gray/20 text-elche-text font-bold active:scale-90 transition-transform flex items-center justify-center text-lg hover:bg-elche-gray/40">
                       +
                    </button>

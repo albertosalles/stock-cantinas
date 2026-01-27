@@ -63,7 +63,7 @@ export default function EventCatalogTab({
                     <td className="p-4 text-center">
                       <input
                         type="number"
-                        step="0.01"
+                        step="0.5"
                         value={row.editPrice}
                         onChange={e => setEventProducts(l => l.map(r => r.id === row.id ? { ...r, editPrice: e.target.value } : r))}
                         className="p-2 rounded-xl w-24 border border-elche-gray/50 text-center font-bold focus:ring-2 focus:ring-elche-primary focus:outline-none"

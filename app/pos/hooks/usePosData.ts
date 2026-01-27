@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useLiveInventory } from '@/hooks/useLiveInventory';
 
-export type Product = { id: string; name: string; price_cents: number };
+export type Product = { id: string; name: string; price_cents: number; sku: string };
 export type InventoryRow = { product_id: string; current_qty: number; low_stock_threshold: number };
 export type Totals = { num_sales: number; total_cents: number; total_items: number };
 
@@ -28,17 +28,27 @@ export function usePosData(eventId: string, cantinaId: string, sessionChecked: b
     (async () => {
       const { data, error } = await supabase
         .from('event_products')
-        .select('product_id, price_cents, products(name)')
+        .select('product_id, price_cents, products(name, sku)')
         .eq('event_id', eventId)
         .eq('active', true)
-        .order('product_id');
-        
-      if (!error) {
-        setProducts((data ?? []).map((row: any) => ({
+        .order('sort_order', { ascending: true }); // Fallback
+
+      if (!error && data) {
+        const mappedProducts = data.map((row: any) => ({
           id: row.product_id,
           name: row.products?.name ?? '—',
           price_cents: row.price_cents,
-        })));
+          sku: row.products?.sku ?? '',
+        }));
+
+        // Ordenar por SKU (alfanumérico)
+        mappedProducts.sort((a: any, b: any) => {
+          const skuA = String(a.sku || '');
+          const skuB = String(b.sku || '');
+          return skuA.localeCompare(skuB, undefined, { numeric: true });
+        });
+
+        setProducts(mappedProducts);
       }
     })();
   }, [sessionChecked, eventId]);
@@ -62,7 +72,7 @@ export function usePosData(eventId: string, cantinaId: string, sessionChecked: b
         .select('*')
         .match({ event_id: eventId, cantina_id: cantinaId })
         .maybeSingle();
-        
+
       if (totalsData) {
         setTotals({
           num_sales: totalsData.num_sales ?? 0,
