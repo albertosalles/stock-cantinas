@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import InstallPrompt from '@/components/InstallPrompt';
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -21,8 +22,8 @@ export const metadata: Metadata = {
   description: "Sistema de gestión de inventario y ventas para cantinas del Elche CF",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icon-192x192.png",
-    apple: "/apple-icon.png",
+    icon: "/android-chrome-192x192.png",
+    apple: "/apple-touch-icon.png",
   },
   appleWebApp: {
     capable: true,
@@ -41,6 +42,7 @@ export default function RootLayout({
     <html lang="es">
       <body className={inter.variable}>
         {children}
+        <InstallPrompt />
       </body>
     </html>
   );
