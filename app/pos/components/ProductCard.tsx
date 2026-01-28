@@ -14,10 +14,16 @@ export default function ProductCard({ product, inventory, onAdd }: ProductCardPr
 
   const dotColor = status === 'ok' ? 'bg-elche-success' : status === 'bajo' ? 'bg-elche-warning' : 'bg-elche-danger';
   const borderColor = status === 'ok' ? 'hover:border-elche-success' : status === 'bajo' ? 'hover:border-elche-warning' : 'hover:border-elche-danger';
+  const handlePress = () => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+    onAdd();
+  };
 
   return (
     <button
-      onClick={() => qty > 0 && onAdd()}
+      onClick={() => qty > 0 && handlePress()}
       disabled={qty <= 0}
       className={`
         bg-elche-surface p-3 md:p-5 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-transparent transition-all duration-200 ease-out text-left relative overflow-hidden flex flex-col justify-between min-h-[120px] w-full group
