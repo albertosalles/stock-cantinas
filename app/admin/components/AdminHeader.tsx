@@ -1,20 +1,24 @@
 import React from 'react';
 import Link from 'next/link';
 
+import NotificationBell from './NotificationBell';
+
 interface AdminHeaderProps {
   title?: string;
   subtitle?: string;
   showBack?: boolean;
   backUrl?: string;
   children?: React.ReactNode;
+  eventId?: string;
 }
 
-export default function AdminHeader({ 
-  title = 'Panel de Administración', 
+export default function AdminHeader({
+  title = 'Panel de Administración',
   subtitle = 'Configuración de eventos y catálogo',
   showBack = false,
   backUrl = '/admin',
-  children 
+  children,
+  eventId
 }: AdminHeaderProps) {
   return (
     <header className="sticky top-0 z-50 bg-gradient-to-r from-elche-primary to-elche-secondary text-white shadow-md h-auto transition-all">
@@ -31,12 +35,16 @@ export default function AdminHeader({
               <div className="text-sm opacity-90 font-medium">{subtitle}</div>
             </div>
           </div>
-          
-          {children && (
-            <div className="flex gap-2 bg-white/10 p-1.5 rounded-2xl backdrop-blur-md border border-white/10 overflow-x-auto max-w-full self-stretch md:self-auto">
-              {children}
-            </div>
-          )}
+
+          <div className="flex items-center gap-3 self-stretch md:self-auto justify-end">
+            {children && (
+              <div className="flex gap-2 bg-white/10 p-1.5 rounded-2xl backdrop-blur-md border border-white/10 overflow-x-auto max-w-full">
+                {children}
+              </div>
+            )}
+
+            {eventId && <NotificationBell eventId={eventId} />}
+          </div>
         </div>
       </div>
     </header>

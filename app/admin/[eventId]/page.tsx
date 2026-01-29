@@ -64,6 +64,7 @@ export default function EventAdminPage() {
         subtitle={eventLogic.eventDate ? new Date(eventLogic.eventDate).toLocaleDateString() : 'Cargando...'}
         showBack={true}
         backUrl="/admin"
+        eventId={eventId}
       >
         <nav className="flex gap-1">
           {(['general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
@@ -71,8 +72,8 @@ export default function EventAdminPage() {
               key={key}
               onClick={() => handleTabChange(key)}
               className={`px-4 py-2 rounded-xl text-sm transition-all whitespace-nowrap ${tab === key
-                  ? 'bg-white text-elche-primary font-bold shadow-sm'
-                  : 'bg-transparent text-white/80 font-medium hover:bg-white/10 hover:text-white'
+                ? 'bg-white text-elche-primary font-bold shadow-sm'
+                : 'bg-transparent text-white/80 font-medium hover:bg-white/10 hover:text-white'
                 }`}
             >
               {key === 'general' && '⚙️ General'}
@@ -94,8 +95,8 @@ export default function EventAdminPage() {
               key={key}
               onClick={() => handleTabChange(key)}
               className={`px-4 py-2 rounded-full text-sm transition-all border ${tab === key
-                  ? 'bg-elche-primary text-white border-elche-primary font-bold shadow-md'
-                  : 'bg-white text-elche-muted border-gray-200 font-medium'
+                ? 'bg-elche-primary text-white border-elche-primary font-bold shadow-md'
+                : 'bg-white text-elche-muted border-gray-200 font-medium'
                 }`}
             >
               {key === 'general' && '⚙️ General'}
