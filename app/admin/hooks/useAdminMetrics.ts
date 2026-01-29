@@ -10,28 +10,31 @@ export interface CantinaMetrics {
   total_cents: number;
 }
 
-export interface PanelRow { 
-  product_id: string; 
-  name: string; 
-  current_qty: number; 
-  low_stock_threshold: number 
+export interface PanelRow {
+  product_id: string;
+  name: string;
+  current_qty: number;
+  low_stock_threshold: number
 }
 
 export function useAdminMetrics(eventId: string, assignedCantinas: { id: string }[]) {
   const [metrics, setMetrics] = useState<{ [id: string]: CantinaMetrics }>({});
   const [loading, setLoading] = useState(false);
-  
+
   // Selected Cantina Panel Data
   const [panelCantinaId, setPanelCantinaId] = useState<string | null>(null);
   const [panelRows, setPanelRows] = useState<PanelRow[]>([]);
   const [panelTotals, setPanelTotals] = useState({ num_sales: 0, total_cents: 0, total_items: 0 });
+
+  // Sales History
+  const [salesHistory, setSalesHistory] = useState<any[]>([]);
 
   const changes = useLiveInventory(eventId, panelCantinaId ?? '');
 
   async function fetchMetrics() {
     setLoading(true);
     const metricsMap: { [id: string]: CantinaMetrics } = {};
-    
+
     assignedCantinas.forEach(c => {
       metricsMap[c.id] = { stock_total: 0, low_stock: 0, num_sales: 0, total_items: 0, total_cents: 0 };
     });
@@ -41,7 +44,7 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
       .from('v_cantina_inventory')
       .select('cantina_id, current_qty, low_stock_threshold')
       .eq('event_id', eventId);
-      
+
     invRows?.forEach((row: any) => {
       const id = row.cantina_id;
       if (!metricsMap[id]) return;
@@ -54,7 +57,7 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
       .from('v_sales_by_cantina')
       .select('cantina_id, num_sales, total_items, total_cents')
       .eq('event_id', eventId);
-      
+
     salesRows?.forEach((row: any) => {
       const id = row.cantina_id;
       if (!metricsMap[id]) return;
@@ -73,7 +76,7 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
       .from('v_cantina_inventory')
       .select('product_id, current_qty, low_stock_threshold')
       .match({ event_id: eventId, cantina_id: cantinaId });
-      
+
     const invMap = new Map(inv?.map((r: any) => [r.product_id, r]) ?? []);
 
     const { data: prods } = await supabase
@@ -100,12 +103,36 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
       .select('num_sales,total_cents,total_items')
       .match({ event_id: eventId, cantina_id: cantinaId })
       .maybeSingle();
-      
+
     setPanelTotals({
       num_sales: totals?.num_sales ?? 0,
       total_cents: totals?.total_cents ?? 0,
       total_items: totals?.total_items ?? 0
     });
+
+    // Sales History (Last 30)
+    const { data: sales } = await supabase
+      .from('sales')
+      .select(`
+        id, 
+        created_at, 
+        total_items, 
+        total_cents, 
+        status,
+        sale_line_items (
+          id,
+          qty,
+          unit_price_cents,
+          product:products (
+            name
+          )
+        )
+      `)
+      .match({ event_id: eventId, cantina_id: cantinaId })
+      .order('created_at', { ascending: false })
+      .limit(15);
+
+    setSalesHistory(sales ?? []);
   }
 
   useEffect(() => {
@@ -119,10 +146,11 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
   return {
     metrics,
     loading,
-    panelCantinaId, 
+    panelCantinaId,
     setPanelCantinaId,
     panelRows,
     panelTotals,
+    salesHistory,
     fetchMetrics,
     fetchPanelData
   };

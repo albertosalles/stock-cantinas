@@ -16,7 +16,7 @@ const FALLBACK_USER_ID = process.env.NEXT_PUBLIC_APP_USER_ID!;
 
 export function usePosSession() {
   const router = useRouter();
-  
+
   const [session, setSession] = useState<PosSession>({
     eventId: '',
     cantinaId: '',
@@ -27,53 +27,66 @@ export function usePosSession() {
   });
 
   useEffect(() => {
-    const sessionData = localStorage.getItem('cantina_session');
-    
-    if (!sessionData) {
-      // No hay sesión, redirigir al login
-      router.push('/login');
-      return;
-    }
+    const checkSession = async () => {
+      const sessionData = localStorage.getItem('cantina_session');
 
-    try {
-      const parsedSession = JSON.parse(sessionData);
-      
-      // Verificar que el evento siga activo
-      supabase
-        .from('events')
-        .select('status, name')
-        .eq('id', parsedSession.eventId)
-        .single()
-        .then(({ data, error }) => {
-          if (error || !data) {
-            alert('Error al verificar el evento');
-            localStorage.removeItem('cantina_session');
-            router.push('/login');
-            return;
-          }
+      if (!sessionData) {
+        router.push('/login');
+        return;
+      }
 
-          if (data.status !== 'live') {
-            alert('El evento ya no está activo');
-            localStorage.removeItem('cantina_session');
-            router.push('/login');
-            return;
-          }
+      try {
+        const parsedSession = JSON.parse(sessionData);
 
-          // Sesión válida
-          setSession({
-            eventId: parsedSession.eventId,
-            cantinaId: parsedSession.cantinaId,
-            userId: FALLBACK_USER_ID,
-            eventName: parsedSession.eventName,
-            cantinaName: parsedSession.cantinaName,
-            sessionChecked: true,
-          });
+        // PASO 1 (CRÍTICO PARA OFFLINE): 
+        // Establecemos la sesión inmediatamente con los datos locales.
+        // Esto permite que la app cargue aunque no haya internet.
+        setSession({
+          eventId: parsedSession.eventId,
+          cantinaId: parsedSession.cantinaId,
+          userId: FALLBACK_USER_ID,
+          eventName: parsedSession.eventName,
+          cantinaName: parsedSession.cantinaName,
+          sessionChecked: true, // Permitimos renderizar el TPV
         });
-    } catch (e) {
-      console.error('Error parsing session:', e);
-      localStorage.removeItem('cantina_session');
-      router.push('/login');
-    }
+
+        // PASO 2: Verificación en segundo plano (Background Check)
+        // Intentamos contactar con Supabase. Si falla por red, NO hacemos nada.
+        // Solo cerramos sesión si Supabase nos responde explícitamente que el evento acabó.
+        const { data, error } = await supabase
+          .from('events')
+          .select('status, name')
+          .eq('id', parsedSession.eventId)
+          .single();
+
+        // CASO A: Error de red o servidor -> Asumimos Offline y mantenemos sesión abierta.
+        if (error) {
+          console.warn('Modo Offline: No se pudo verificar el estado del evento. Manteniendo sesión local.');
+          return;
+        }
+
+        // CASO B: Conectamos bien, pero el evento ya no está activo
+        if (data && data.status !== 'live') {
+          alert('El evento ha finalizado o está pausado.');
+          localStorage.removeItem('cantina_session');
+          router.push('/login');
+          return;
+        }
+
+        // CASO C: Todo bien, actualizamos el nombre si cambió
+        if (data && data.name !== parsedSession.eventName) {
+          setSession(prev => ({ ...prev, eventName: data.name }));
+        }
+
+      } catch (e) {
+        console.error('Error parsing session:', e);
+        // Si el JSON local está corrupto, ahí sí debemos limpiar
+        localStorage.removeItem('cantina_session');
+        router.push('/login');
+      }
+    };
+
+    checkSession();
   }, [router]);
 
   const logout = () => {
@@ -85,4 +98,3 @@ export function usePosSession() {
 
   return { ...session, logout };
 }
-

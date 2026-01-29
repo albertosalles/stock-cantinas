@@ -72,3 +72,9 @@ Thumbs.db
 # Dependencias y builds adicionales
 dist/
 .turbo/
+
+
+# PWA
+public/sw.js
+public/workbox-*.js
+public/worker-*.js

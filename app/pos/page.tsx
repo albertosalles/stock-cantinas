@@ -1,145 +1,182 @@
 'use client';
 
 import { useState } from 'react';
+import { Toaster, toast } from 'react-hot-toast'; // Feedback visual
 import { createSale } from '@/lib/sales';
 import { usePosSession } from './hooks/usePosSession';
 import { usePosData } from './hooks/usePosData';
 import { useCart } from './hooks/useCart';
+import { useOfflineSales } from './hooks/useOfflineSales'; // Tu nuevo hook
 import PosHeader from './components/PosHeader';
 import PosSalesTab from './components/PosSalesTab';
 import PosInventoryTab from './components/PosInventoryTab';
 import PosHistoryTab from './components/PosHistoryTab';
 
 export default function PosPage() {
-  const { eventId, cantinaId, userId, eventName, cantinaName, sessionChecked, logout } = usePosSession();
-  const { products, inventory, invMap, totals, refreshInventory, refreshTotals } = usePosData(eventId, cantinaId, sessionChecked);
-  const { cart, addOne, decOne, clearCart, totalEur } = useCart(products);
-  
-  const [tab, setTab] = useState<'venta'|'inventario'|'ventas'>('venta');
+  // 1. Hooks de Datos y Sesión
+  const session = usePosSession();
+  const { products, inventory, invMap, totals, refreshInventory, refreshTotals, loading } = usePosData(
+    session.eventId,
+    session.cantinaId,
+    session.sessionChecked
+  );
 
-  // Si no se ha verificado la sesión, mostrar loading
-  if (!sessionChecked) {
+  // 2. Hook del Carrito
+  const { cart, addOne, decOne, clearCart, totalEur } = useCart(products);
+
+  // 3. Hook Offline (La magia nueva)
+  const { queueSale, pendingCount, syncQueue } = useOfflineSales();
+
+  // Estado local para UI
+  const [tab, setTab] = useState<'venta' | 'inventario' | 'ventas'>('venta');
+  const [processing, setProcessing] = useState(false);
+
+  // Pantalla de carga inicial
+  if (!session.sessionChecked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-elche-bg">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <div className="text-5xl mb-4 animate-pulse">⏳</div>
-          <div className="text-lg text-elche-text font-medium">Cargando sistema...</div>
+          <div className="text-lg text-slate-600 font-medium">Cargando sistema...</div>
         </div>
       </div>
     );
   }
 
+  // 4. Lógica de Venta Robusta (Online + Offline)
   const handleSell = async () => {
-    if (!cart.length) return;
+    if (cart.length === 0 || processing) return;
+    setProcessing(true);
+
+    const salePayload = {
+      eventId: session.eventId,
+      cantinaId: session.cantinaId,
+      userId: session.userId,
+      lines: cart
+    };
+
     try {
-      await createSale(eventId, cantinaId, userId, cart);
+      // A. Optimistic UI: Vaciamos el carrito visualmente YA
       clearCart();
-      await Promise.all([refreshInventory(), refreshTotals()]);
-      alert('Venta registrada ✅');
-    } catch (e: any) {
-      alert(e?.message ?? 'Error al vender');
+
+      // B. Intentamos enviar si el navegador dice que hay línea
+      if (navigator.onLine) {
+        await createSale(
+          salePayload.eventId,
+          salePayload.cantinaId,
+          salePayload.userId,
+          salePayload.lines
+        );
+
+        toast.success('Venta registrada', { duration: 2000 });
+
+        // Actualizamos contadores de dinero
+        refreshTotals();
+        refreshInventory();
+      } else {
+        // Forzamos el error para ir al bloque catch si no hay línea
+        throw new Error('Offline detected');
+      }
+
+    } catch (error) {
+      // C. MODO OFFLINE (Fallback)
+      console.log("⚠️ Modo offline activado para esta venta");
+
+      // Guardamos en la cola segura (IndexedDB)
+      await queueSale(salePayload);
+
+      // Avisamos al usuario con un icono diferente
+      toast('Guardado en el dispositivo', {
+        icon: '☁️',
+        duration: 3000,
+        style: { border: '1px solid #f59e0b', color: '#b45309' }
+      });
+    } finally {
+      setProcessing(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-elche-bg pb-24 md:pb-0">
-      
-      <PosHeader 
-        eventName={eventName} 
-        cantinaName={cantinaName} 
-        tab={tab} 
-        setTab={setTab} 
-        onLogout={logout} 
+    <main className="min-h-screen bg-slate-50 pb-20 md:pb-0">
+      <Toaster position="top-center" />
+
+      {/* HEADER: Ahora recibe pendingUploads y onManualSync */}
+      <PosHeader
+        eventName={session.eventName}
+        cantinaName={session.cantinaName}
+        onLogout={session.logout}
+        pendingUploads={pendingCount}
+        onManualSync={syncQueue}
       />
 
-      {/* Navegación Móvil (Pills) */}
-      <div className="md:hidden px-4 py-3 overflow-x-auto flex gap-2 snap-x no-scrollbar sticky top-14 bg-elche-bg z-20 pb-2">
-         {(['venta', 'inventario', 'ventas'] as const).map(t => (
-            <button key={t}
-              onClick={() => setTab(t)}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-bold transition-colors snap-start ${
-                tab === t 
-                  ? 'bg-elche-primary text-white shadow-md' 
-                  : 'bg-white text-elche-muted border border-gray-200'
-              }`}>
-              {t === 'venta' ? '💰 Venta' : t === 'inventario' ? '📦 Inventario' : '📊 Historial'}
-            </button>
-          ))}
+      {/* PESTAÑAS DE NAVEGACIÓN (Solo visible en móvil normalmente, o integrado en header) */}
+      <div className="max-w-7xl mx-auto p-2 flex gap-2 justify-center md:justify-start">
+        <button
+          onClick={() => setTab('venta')}
+          className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${tab === 'venta' ? 'bg-elche-primary text-white shadow-md' : 'bg-elche-gray text-elche-primary hover:bg-elche-primary/10'}`}
+        >
+          🛒 Venta
+        </button>
+        <button
+          onClick={() => setTab('inventario')}
+          className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${tab === 'inventario' ? 'bg-elche-primary text-white shadow-md' : 'bg-elche-gray text-elche-primary hover:bg-elche-primary/10'}`}
+        >
+          📦 Stock
+        </button>
+        <button
+          onClick={() => setTab('ventas')}
+          className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${tab === 'ventas' ? 'bg-elche-primary text-white shadow-md' : 'bg-elche-gray text-elche-primary hover:bg-elche-primary/10'}`}
+        >
+          📝 Historial
+        </button>
       </div>
 
-      <div className="max-w-[1600px] mx-auto p-3 md:p-8">
-
-      {tab === 'venta' && (
-          <PosSalesTab 
-            products={products}
-            invMap={invMap}
-            cart={cart}
-            totalEur={totalEur}
-            onAddOne={addOne}
-            onDecOne={decOne}
-            onClear={clearCart}
-            onSell={handleSell}
-          />
-        )}
-
-      {tab === 'inventario' && (
-          <PosInventoryTab 
-            eventId={eventId}
-            cantinaId={cantinaId}
-            userId={userId}
-            products={products}
-            inventory={inventory}
-            onRefresh={refreshInventory}
-          />
-        )}
-
-      {tab === 'ventas' && (
-        <section className="grid gap-6">
-             {/* Totales Widget */}
-          <div className="bg-white p-5 rounded-2xl shadow-[0_2px_12px_rgba(0,150,79,0.08)] border border-elche-gray/50">
-            <div className="font-bold text-lg mb-4 text-elche-text border-b border-elche-gray pb-2">
-                📊 Totales del evento
+      <div className="max-w-7xl mx-auto p-4">
+        {loading && tab === 'venta' ? (
+          <div className="text-center py-20 text-slate-500">Cargando catálogo...</div>
+        ) : (
+          <>
+            {/* PESTAÑA: VENTA (TPV) */}
+            <div className={tab === 'venta' ? 'block' : 'hidden'}>
+              <PosSalesTab
+                products={products}
+                invMap={invMap}
+                cart={cart}
+                totalEur={totalEur}
+                onAddOne={addOne}
+                onDecOne={decOne}
+                onClear={clearCart}
+                onSell={handleSell}
+              />
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-elche-green to-elche-green-light text-white shadow-sm relative overflow-hidden">
-                <div className="relative z-10">
-                  <div className="opacity-90 mb-2 text-sm font-bold uppercase tracking-wide">Tickets</div>
-                  <div className="text-4xl font-extrabold">{totals.num_sales}</div>
-                </div>
-                <div className="absolute -bottom-4 -right-4 opacity-20 text-6xl">🎫</div>
-              </div>
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-elche-green-light to-elche-green text-white shadow-sm relative overflow-hidden">
-                <div className="relative z-10">
-                  <div className="opacity-90 mb-2 text-sm font-bold uppercase tracking-wide">Artículos</div>
-                  <div className="text-4xl font-extrabold">{totals.total_items}</div>
-                </div>
-                <div className="absolute -bottom-4 -right-4 opacity-20 text-6xl">📦</div>
-              </div>
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-elche-green-dark to-elche-green text-white shadow-sm relative overflow-hidden">
-                <div className="relative z-10">
-                  <div className="opacity-90 mb-2 text-sm font-bold uppercase tracking-wide">Ingresos</div>
-                  <div className="text-4xl font-extrabold">{(totals.total_cents/100).toFixed(2)} €</div>
-                </div>
-                <div className="absolute -bottom-4 -right-4 opacity-20 text-6xl">💰</div>
-              </div>
+
+            {/* PESTAÑA: INVENTARIO */}
+            <div className={tab === 'inventario' ? 'block' : 'hidden'}>
+              <PosInventoryTab
+                // Añadimos las 3 IDs que faltaban (vienen de tu objeto 'session')
+                eventId={session.eventId}
+                cantinaId={session.cantinaId}
+                userId={session.userId}
+                // Datos existentes
+                inventory={inventory}
+                products={products}
+                // Corregimos el nombre: de 'refresh' a 'onRefresh'
+                onRefresh={refreshInventory}
+              />
             </div>
-            <button 
-                onClick={refreshTotals} 
-              className="mt-5 px-6 py-3 rounded-xl bg-elche-gray/20 text-elche-text font-semibold hover:bg-elche-gray/40 transition-colors w-full border border-elche-gray/50">
-              🔄 Refrescar datos
-            </button>
-          </div>
 
-            <PosHistoryTab 
-              eventId={eventId}
-              cantinaId={cantinaId}
-              products={products}
-              sessionChecked={sessionChecked}
-            />
-        </section>
-      )}
-
+            {/* PESTAÑA: HISTORIAL */}
+            <div className={tab === 'ventas' ? 'block' : 'hidden'}>
+              <PosHistoryTab
+                eventId={session.eventId}
+                cantinaId={session.cantinaId}
+                products={products}
+                sessionChecked={session.sessionChecked}
+              />
+            </div>
+          </>
+        )}
       </div>
-    </div>
+    </main>
   );
 }

@@ -29,16 +29,16 @@ export default function EventAdminPage() {
   const [tab, setTab] = useState<TabKey>('general');
 
   // --- Hooks de Lógica ---
-  
+
   // 1. General del Evento
   const eventLogic = useAdminEvent(eventId);
-  
+
   // 2. Cantinas
   const cantinasLogic = useAdminCantinas(eventId);
-  
+
   // 3. Catálogo de Productos
   const catalogLogic = useAdminCatalog(eventId);
-  
+
   // 4. Inventario (requiere cantina seleccionada)
   const [inventoryCantinaId, setInventoryCantinaId] = useState<string>('');
   const inventoryLogic = useAdminInventory(eventId, inventoryCantinaId, catalogLogic.eventProducts);
@@ -57,9 +57,9 @@ export default function EventAdminPage() {
 
   return (
     <div className="min-h-screen bg-elche-bg pb-24 md:pb-0">
-      
+
       {/* Header y Navegación */}
-      <AdminHeader 
+      <AdminHeader
         title={eventLogic.eventName || 'Administración de Evento'}
         subtitle={eventLogic.eventDate ? new Date(eventLogic.eventDate).toLocaleDateString() : 'Cargando...'}
         showBack={true}
@@ -67,14 +67,13 @@ export default function EventAdminPage() {
       >
         <nav className="flex gap-1">
           {(['general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
-            <button 
+            <button
               key={key}
               onClick={() => handleTabChange(key)}
-              className={`px-4 py-2 rounded-xl text-sm transition-all whitespace-nowrap ${
-                tab === key 
-                  ? 'bg-white text-elche-primary font-bold shadow-sm' 
+              className={`px-4 py-2 rounded-xl text-sm transition-all whitespace-nowrap ${tab === key
+                  ? 'bg-white text-elche-primary font-bold shadow-sm'
                   : 'bg-transparent text-white/80 font-medium hover:bg-white/10 hover:text-white'
-              }`}
+                }`}
             >
               {key === 'general' && '⚙️ General'}
               {key === 'cantinas' && '🏪 Cantinas'}
@@ -91,14 +90,13 @@ export default function EventAdminPage() {
       <div className="md:hidden sticky top-0 z-40 bg-elche-bg/95 backdrop-blur-sm border-b border-elche-gray/50 overflow-x-auto">
         <div className="flex p-2 gap-2 min-w-max">
           {(['general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
-            <button 
+            <button
               key={key}
               onClick={() => handleTabChange(key)}
-              className={`px-4 py-2 rounded-full text-sm transition-all border ${
-                tab === key 
-                  ? 'bg-elche-primary text-white border-elche-primary font-bold shadow-md' 
+              className={`px-4 py-2 rounded-full text-sm transition-all border ${tab === key
+                  ? 'bg-elche-primary text-white border-elche-primary font-bold shadow-md'
                   : 'bg-white text-elche-muted border-gray-200 font-medium'
-              }`}
+                }`}
             >
               {key === 'general' && '⚙️ General'}
               {key === 'cantinas' && '🏪 Cantinas'}
@@ -112,11 +110,11 @@ export default function EventAdminPage() {
       </div>
 
       <main className="max-w-[1600px] mx-auto p-4 md:p-8 animate-fade-in">
-        
+
         {/* Renderizado Condicional de Tabs */}
-        
+
         {tab === 'general' && (
-          <EventGeneralTab 
+          <EventGeneralTab
             eventName={eventLogic.eventName}
             setEventName={eventLogic.setEventName}
             eventDate={eventLogic.eventDate}
@@ -126,7 +124,7 @@ export default function EventAdminPage() {
         )}
 
         {tab === 'cantinas' && (
-          <EventCantinasTab 
+          <EventCantinasTab
             cantinas={cantinasLogic.cantinas}
             loading={cantinasLogic.loading}
             onToggle={cantinasLogic.toggleCantina}
@@ -135,7 +133,7 @@ export default function EventAdminPage() {
         )}
 
         {tab === 'catalogo' && (
-          <EventCatalogTab 
+          <EventCatalogTab
             eventProducts={catalogLogic.eventProducts}
             allProducts={catalogLogic.allProducts}
             loading={catalogLogic.loading}
@@ -148,18 +146,18 @@ export default function EventAdminPage() {
         )}
 
         {tab === 'inventario' && (
-          <EventInventoryTab 
+          <EventInventoryTab
             cantinas={cantinasLogic.cantinas} // Pasamos todas, el componente filtra las asignadas
             selectedCantinaId={inventoryCantinaId}
             setSelectedCantinaId={setInventoryCantinaId}
             loading={inventoryLogic.loading}
             inventory={inventoryLogic.inventory}
             products={catalogLogic.eventProducts}
-            
+
             initForm={inventoryLogic.initForm}
             setInitForm={inventoryLogic.setInitForm}
             onSaveInit={inventoryLogic.saveInitialInventory}
-            
+
             adjustForm={inventoryLogic.adjustForm}
             setAdjustForm={inventoryLogic.setAdjustForm}
             adjustType={inventoryLogic.adjustType}
@@ -167,28 +165,29 @@ export default function EventAdminPage() {
             adjustReason={inventoryLogic.adjustReason}
             setAdjustReason={inventoryLogic.setAdjustReason}
             onApplyAdjust={inventoryLogic.applyAdjustments}
-            
+
             finalForm={inventoryLogic.finalForm}
             setFinalForm={inventoryLogic.setFinalForm}
             onSaveFinal={inventoryLogic.saveFinalInventory}
-            
+
             onRefresh={inventoryLogic.fetchInventoryData}
           />
         )}
 
         {tab === 'panel' && (
-          <EventPanelTab 
+          <EventPanelTab
             cantinas={cantinasLogic.cantinas}
             panelCantinaId={metricsLogic.panelCantinaId}
             setPanelCantinaId={metricsLogic.setPanelCantinaId}
             panelTotals={metricsLogic.panelTotals}
             panelRows={metricsLogic.panelRows}
+            salesHistory={metricsLogic.salesHistory}
             onRefresh={() => metricsLogic.panelCantinaId && metricsLogic.fetchPanelData(metricsLogic.panelCantinaId)}
           />
         )}
 
         {tab === 'global' && (
-          <EventGlobalTab 
+          <EventGlobalTab
             eventId={eventId}
             eventName={eventLogic.eventName}
             products={catalogLogic.eventProducts}

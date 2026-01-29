@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import InstallPrompt from '@/components/InstallPrompt';
+import InstallPrompt from "@/components/InstallPrompt";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import Providers from "./providers";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -31,6 +32,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     //startupImage: [], //opcional
   },
+  formatDetection: {
+    telephone: false,
+  }
 };
 
 export default function RootLayout({
@@ -41,7 +45,9 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={inter.variable}>
-        {children}
+        <Providers>
+          {children}
+        </Providers>
         <InstallPrompt />
       </body>
     </html>

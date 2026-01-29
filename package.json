@@ -3,16 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start"
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.74.0",
+    "@tanstack/query-sync-storage-persister": "^5.90.22",
+    "@tanstack/react-query": "^5.90.20",
+    "@tanstack/react-query-persist-client": "^5.90.22",
+    "idb-keyval": "^6.2.2",
     "next": "^16.1.5",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "react-hot-toast": "^2.6.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
