@@ -115,7 +115,7 @@ export default function PosPage() {
           onClick={() => setTab('venta')}
           className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${tab === 'venta' ? 'bg-elche-primary text-white shadow-md' : 'bg-elche-gray text-elche-primary hover:bg-elche-primary/10'}`}
         >
-          🛒 Venta
+          💰 Venta
         </button>
         <button
           onClick={() => setTab('inventario')}
