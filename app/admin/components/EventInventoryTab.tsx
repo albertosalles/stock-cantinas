@@ -9,20 +9,20 @@ interface EventInventoryTabProps {
   loading: boolean;
   inventory: InventoryRow[];
   products: EventProductRow[];
-  
+
   initForm: Record<string, number>;
   setInitForm: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  
+
   adjustForm: Record<string, number>;
   setAdjustForm: React.Dispatch<React.SetStateAction<Record<string, number>>>;
   adjustType: string;
   setAdjustType: (val: any) => void;
   adjustReason: string;
   setAdjustReason: (val: string) => void;
-  
+
   finalForm: Record<string, number>;
   setFinalForm: React.Dispatch<React.SetStateAction<Record<string, number>>>;
-  
+
   onSaveInit: () => void;
   onApplyAdjust: () => void;
   onSaveFinal: () => void;
@@ -47,9 +47,9 @@ export default function EventInventoryTab({
       {/* Selector Cantina */}
       <div className="mb-6 p-4 bg-elche-gray/20 rounded-2xl border border-elche-gray/50 flex flex-col md:flex-row gap-4 items-center">
         <span className="font-bold text-elche-text text-sm uppercase tracking-wide">Selecciona Cantina:</span>
-        <select 
-          value={selectedCantinaId} 
-          onChange={e => setSelectedCantinaId(e.target.value)} 
+        <select
+          value={selectedCantinaId}
+          onChange={e => setSelectedCantinaId(e.target.value)}
           className="flex-1 p-3 rounded-xl border border-elche-gray bg-white font-bold text-elche-text focus:ring-2 focus:ring-elche-primary focus:outline-none"
         >
           <option value="">-- Seleccionar --</option>
@@ -70,12 +70,12 @@ export default function EventInventoryTab({
         </div>
       ) : loading ? (
         <div className="py-16 text-center flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-4 border-elche-primary border-t-transparent rounded-full animate-spin"/>
+          <div className="w-8 h-8 border-4 border-elche-primary border-t-transparent rounded-full animate-spin" />
           <span className="text-elche-text-light font-medium">Cargando datos de inventario...</span>
         </div>
       ) : (
-        <div className="grid gap-8">
-          
+        <div className="grid grid-cols-1 gap-8">
+
           {/* INICIAL */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-elche-gray/50">
             <div className="font-bold text-lg mb-4 text-elche-text flex items-center gap-2">
@@ -86,14 +86,14 @@ export default function EventInventoryTab({
                 <div key={p.product_id} className="flex justify-between items-center p-3 bg-elche-gray/10 rounded-2xl border border-elche-gray/30">
                   <span className="font-semibold text-elche-text ml-2">{p.name}</span>
                   <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-elche-gray/30 shadow-sm">
-                    <button onClick={() => setInitForm(s => ({...s, [p.product_id]: Math.max(0, (s[p.product_id]||0)-1)}))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">-</button>
-                    <input 
-                      type="number" 
-                      value={initForm[p.product_id] ?? 0} 
-                      onChange={e => setInitForm(s => ({...s, [p.product_id]: parseInt(e.target.value||'0',10)}))}
+                    <button onClick={() => setInitForm(s => ({ ...s, [p.product_id]: Math.max(0, (s[p.product_id] || 0) - 1) }))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">-</button>
+                    <input
+                      type="number"
+                      value={initForm[p.product_id] ?? 0}
+                      onChange={e => setInitForm(s => ({ ...s, [p.product_id]: parseInt(e.target.value || '0', 10) }))}
                       className="w-16 text-center font-bold border-none focus:ring-0 p-0"
                     />
-                    <button onClick={() => setInitForm(s => ({...s, [p.product_id]: (s[p.product_id]||0)+1}))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">+</button>
+                    <button onClick={() => setInitForm(s => ({ ...s, [p.product_id]: (s[p.product_id] || 0) + 1 }))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">+</button>
                   </div>
                 </div>
               ))}
@@ -129,11 +129,11 @@ export default function EventInventoryTab({
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-elche-gray/30 shadow-sm">
-                        <button onClick={() => setAdjustForm(s => ({...s, [p.product_id]: (s[p.product_id]??0)-1}))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">-</button>
-                        <input type="number" value={delta} onChange={e => setAdjustForm(s => ({...s, [p.product_id]: parseInt(e.target.value||'0',10)}))} className="w-12 text-center font-bold border-none focus:ring-0 p-0" />
-                        <button onClick={() => setAdjustForm(s => ({...s, [p.product_id]: (s[p.product_id]??0)+1}))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">+</button>
+                        <button onClick={() => setAdjustForm(s => ({ ...s, [p.product_id]: (s[p.product_id] ?? 0) - 1 }))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">-</button>
+                        <input type="number" value={delta} onChange={e => setAdjustForm(s => ({ ...s, [p.product_id]: parseInt(e.target.value || '0', 10) }))} className="w-12 text-center font-bold border-none focus:ring-0 p-0" />
+                        <button onClick={() => setAdjustForm(s => ({ ...s, [p.product_id]: (s[p.product_id] ?? 0) + 1 }))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">+</button>
                       </div>
-                      <div className={`font-bold w-10 text-center ${delta!==0 ? 'text-amber-600' : 'text-gray-300'}`}>{cur + delta}</div>
+                      <div className={`font-bold w-10 text-center ${delta !== 0 ? 'text-amber-600' : 'text-gray-300'}`}>{cur + delta}</div>
                     </div>
                   </div>
                 );
@@ -159,13 +159,13 @@ export default function EventInventoryTab({
                       <div className="text-xs text-elche-text-light">Calc: <strong>{cur}</strong></div>
                     </div>
                     <div className="flex items-center gap-3">
-                      <input 
-                        type="number" 
-                        value={finalForm[p.product_id] ?? 0} 
-                        onChange={e => setFinalForm(s => ({...s, [p.product_id]: parseInt(e.target.value||'0',10)}))}
+                      <input
+                        type="number"
+                        value={finalForm[p.product_id] ?? 0}
+                        onChange={e => setFinalForm(s => ({ ...s, [p.product_id]: parseInt(e.target.value || '0', 10) }))}
                         className="w-20 p-2 text-center font-bold rounded-xl border border-elche-gray/30 focus:ring-2 focus:ring-elche-primary focus:outline-none"
                       />
-                      <button onClick={() => setFinalForm(s => ({...s, [p.product_id]: cur}))} className="p-2 bg-white rounded-xl border border-elche-gray/30 hover:bg-gray-50 text-xs font-bold shadow-sm">
+                      <button onClick={() => setFinalForm(s => ({ ...s, [p.product_id]: cur }))} className="p-2 bg-white rounded-xl border border-elche-gray/30 hover:bg-gray-50 text-xs font-bold shadow-sm">
                         Usar Calc
                       </button>
                     </div>

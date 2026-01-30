@@ -28,9 +28,9 @@ export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate
         <div className="grid gap-4">
           <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
             {cantinas.map(c => (
-              <div key={c.id} className={`flex justify-between items-center p-4 rounded-2xl border transition-all ${c.assigned ? 'bg-elche-success/5 border-elche-success/30' : 'bg-white border-elche-gray hover:border-elche-gray/80'}`}>
-                <span className={`font-bold ${c.assigned ? 'text-elche-text' : 'text-elche-text-light'}`}>{c.name}</span>
-                <label className="flex items-center gap-3 cursor-pointer select-none">
+              <div key={c.id} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-2xl border transition-all gap-4 sm:gap-0 ${c.assigned ? 'bg-elche-success/5 border-elche-success/30' : 'bg-white border-elche-gray hover:border-elche-gray/80'}`}>
+                <span className={`font-bold ${c.assigned ? 'text-elche-text' : 'text-elche-text-light'} break-all`}>{c.name}</span>
+                <label className="flex items-center gap-3 cursor-pointer select-none w-full sm:w-auto justify-between sm:justify-start">
                   <span className={`text-xs font-bold uppercase tracking-wide ${c.assigned ? 'text-elche-success' : 'text-elche-text-light'}`}>
                     {c.assigned ? 'Asignada' : 'No asignada'}
                   </span>
@@ -51,7 +51,7 @@ export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate
           {/* Create New Cantina */}
           <div className="mt-4 p-5 bg-elche-gray/30 rounded-2xl border border-elche-gray/50">
             <div className="font-bold text-elche-text mb-3">➕ Nueva cantina</div>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input
                 type="text"
                 placeholder="Nombre de la cantina"
@@ -59,20 +59,22 @@ export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate
                 onChange={e => setNewName(e.target.value)}
                 className="flex-1 p-3 rounded-xl border border-elche-gray bg-white focus:outline-none focus:ring-2 focus:ring-elche-primary"
               />
-              <input
-                type="text"
-                placeholder="PIN"
-                value={newPin}
-                onChange={e => setNewPin(e.target.value)}
-                className="w-24 p-3 rounded-xl border border-elche-gray bg-white focus:outline-none focus:ring-2 focus:ring-elche-primary text-center font-mono"
-              />
-              <button
-                onClick={() => { onCreate(newName, newPin); setNewName(''); setNewPin(''); }}
-                disabled={!newName.trim() || !newPin.trim()}
-                className="px-5 py-3 rounded-xl bg-elche-text text-white font-bold shadow-sm hover:bg-elche-primary transition-colors disabled:opacity-50 disabled:shadow-none"
-              >
-                Crear y Asignar
-              </button>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="PIN"
+                  value={newPin}
+                  onChange={e => setNewPin(e.target.value)}
+                  className="w-24 p-3 rounded-xl border border-elche-gray bg-white focus:outline-none focus:ring-2 focus:ring-elche-primary text-center font-mono"
+                />
+                <button
+                  onClick={() => { onCreate(newName, newPin); setNewName(''); setNewPin(''); }}
+                  disabled={!newName.trim() || !newPin.trim()}
+                  className="flex-1 sm:flex-none px-5 py-3 rounded-xl bg-elche-text text-white font-bold shadow-sm hover:bg-elche-primary transition-colors disabled:opacity-50 disabled:shadow-none"
+                >
+                  Crear y Asignar
+                </button>
+              </div>
             </div>
           </div>
         </div>

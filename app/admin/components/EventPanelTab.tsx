@@ -71,8 +71,8 @@ export default function EventPanelTab({
 
       {/* Stock Table */}
       <div className="font-bold mb-4 text-elche-text text-lg">Inventario actual</div>
-      <div className="overflow-hidden rounded-2xl border border-elche-gray/50 shadow-sm mb-10">
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto rounded-2xl border border-elche-gray/50 shadow-sm mb-10">
+        <table className="w-full border-collapse min-w-[300px]">
           <thead>
             <tr className="bg-elche-gray/20 text-elche-text-light text-xs font-bold uppercase tracking-wider">
               <th className="p-4 text-left">Producto</th>
