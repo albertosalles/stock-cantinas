@@ -1,271 +1,347 @@
-# Stock Cantinas — README
+# Stock Cantinas — Elche CF
 
-Digitalizar la **gestión y monitorización en tiempo real** del **stock** y **ventas** de cantinas en un estadio de fútbol.
-
-La app tiene dos roles:
-
-- **Cantina**: punto de venta (POS), gestión de inventario inicial/ajustes/final y visualización de totales.
-- **Administrador**: configuración del evento, asignación de cantinas, definición del catálogo del evento, panel de métricas por cantina y herramientas de inventario.
-
-Este README explica **cómo funciona** la app, **qué hay en Supabase**, **cómo está estructurado el proyecto**, **cómo levantarlo** y **cómo continuar el desarrollo**.
+Sistema **PWA offline-first** para la **gestión de inventario y ventas en tiempo real** de cantinas en un estadio de fútbol, construido con **Next.js 16**, **React 19**, **Supabase** y **TanStack Query**.
 
 ---
 
-## 1) Funcionalidades por rol
+## Índice
 
-### Rol: Cantina
-- **POS (ventas)**
-  - Grid de productos activos del evento.
-  - Carrito visible con líneas, cantidades, total € y acciones `+ / − / Vaciar`.
-  - Botón **Vender** que registra ticket y descuenta stock.
-  - **Historial de ventas** con paginación y detalle por ticket (líneas y subtotales).
-
-- **Inventario**
-  - **Inventario inicial**: fijación/edición en lote (por producto).
-  - **Ajustes del stock actual**: entradas/salidas sin venta (tipo y motivo: *ADJUSTMENT, TRANSFER_IN, TRANSFER_OUT, WASTE, RETURN*).
-  - **Inventario final**: sugerido automáticamente (stock calculado) con opción de **sobrescribir manualmente**.
-
-- **Estado del stock en vivo**
-  - Cantidad actual y **semáforo** por producto (verde OK / ámbar Bajo / rojo Agotado).
-  - **Realtime**: los cambios se reflejan automáticamente.
-
-### Rol: Administrador
-- **Eventos**
-  - Crear/editar evento (nombre y fecha).
-  - **Asignar cantinas** existentes al evento y **crear nuevas cantinas** con asignación inmediata.
-- **Catálogo del evento**
-  - Añadir/editar producto del evento: **precio**, **umbral** de bajo stock, **activar/desactivar**.
-  - **Crear productos globales** (tabla `products`) y asignarlos al evento.
-- **Inventario por cantina (desde Admin)**
-  - Mismas acciones que en Cantina: inventario inicial, ajustes, inventario final.
-- **Panel de métricas**
-  - **Selector de cantina**.
-  - **Totales**: tickets, artículos vendidos, facturación (€).
-  - **Stock por artículo** para la cantina seleccionada, con semáforo por umbral.
-  - **Realtime** del stock.
+1. [Arquitectura general](#1-arquitectura-general)
+2. [Funcionalidades por rol](#2-funcionalidades-por-rol)
+3. [Sistema de autenticación](#3-sistema-de-autenticación)
+4. [PWA y modo offline](#4-pwa-y-modo-offline)
+5. [Esquema de base de datos (Supabase)](#5-esquema-de-base-de-datos-supabase)
+6. [Estructura del proyecto](#6-estructura-del-proyecto)
+7. [Stack tecnológico](#7-stack-tecnológico)
+8. [Arranque local](#8-arranque-local)
+9. [Variables de entorno](#9-variables-de-entorno)
+10. [Guía de diseño](#10-guía-de-diseño)
+11. [Troubleshooting](#11-troubleshooting)
 
 ---
 
-## 2) Cómo funciona (flujo y decisiones clave)
+## 1) Arquitectura general
 
-1. **Catálogo**  
-   - Los productos “globales” viven en `products`.  
-   - Por cada evento se crea `event_products` con **precio** y **umbral** propios (y flags de activación).
+```
+┌─────────────┐     ┌──────────────┐     ┌─────────────────────┐
+│  PWA Client │◄───►│  Supabase    │◄───►│  PostgreSQL          │
+│  (Next.js)  │ WS  │  Realtime    │     │  (RPC + Vistas)      │
+│             │     │              │     │                       │
+│  IndexedDB  │     │  PostgREST   │     │  stock_movements      │
+│  (cache +   │     │  (API REST)  │     │  inventory_snapshots  │
+│   offline   │     │              │     │  sales / sale_items   │
+│   queue)    │     │              │     │  cantina_access       │
+└─────────────┘     └──────────────┘     └─────────────────────┘
+```
 
-2. **Asignación de cantinas**  
-   - Se asignan al evento en `event_cantinas`.
+**Decisiones clave:**
 
-3. **Modelo de stock (auditado)**  
-   - El **stock actual** se **deriva** de la suma de `stock_movements` (no se guarda un “stock actual” materializado).  
-   - Los snapshots **INITIAL** y **FINAL** se guardan en `inventory_snapshots` para auditoría/contabilidad.  
-   - Los **ajustes** (entradas/salidas) generan `stock_movements` con **type** y **reason**.
-
-4. **Venta (POS)**  
-   - El POS llama a `create_sale(p_event_id, p_cantina_id, p_user_id, p_lines[], p_client_request_id)`.  
-   - La función valida stock, inserta `sales` y `sale_line_items`, y registra `stock_movements` negativos (tipo `SALE`).  
-   - **Idempotencia** con `p_client_request_id` para evitar tickets duplicados.
-
-5. **Realtime**  
-   - El frontend se suscribe a `stock_movements` (filtro por `event_id`) y refresca los datos de inventario.
-
-6. **Moneda/Precios**  
-   - **Actual**: precios en `price_cents` (enteros). La UI muestra **euros** (`price_cents/100`).  
-   - **Alternativa**: almacenar euros (`NUMERIC(12,2)`) → requeriría migración de columnas/RPC.
+- **Stock derivado**: el stock actual se **calcula** como la suma de `stock_movements`; nunca se almacena un contador materializado.
+- **Idempotencia**: cada venta lleva un `client_request_id` (UUID) para evitar tickets duplicados.
+- **Offline-first**: las ventas se encolan en **IndexedDB** cuando no hay conexión y se sincronizan automáticamente al recuperarla.
+- **Realtime**: suscripciones WebSocket a `stock_movements` para refrescar inventario y notificaciones al instante.
+- **Persistencia de caché**: TanStack Query persiste la caché en IndexedDB (24 h) para arranque instantáneo y resiliencia offline.
 
 ---
 
-## 3) Esquema en Supabase (resumen)
+## 2) Funcionalidades por rol
 
-### Tablas
+### 🏪 Rol: Cantina (POS)
 
-- **events**: `id (uuid)`, `name (text)`, `date (date)`  
-- **cantinas**: `id (uuid)`, `name (text)`  
-- **event_cantinas**: `event_id (uuid)`, `cantina_id (uuid)` **PK compuesta**  
-- **products**: `id (uuid)`, `name (text)`  
-- **event_products**: `event_id (uuid)`, `product_id (uuid)` **PK compuesta**, `price_cents (int)`, `low_stock_threshold (int)`, `active (bool)`  
-- **inventory_snapshots**: `event_id, cantina_id, product_id (uuid)`, `kind ('INITIAL'|'FINAL')`, `qty (int)`, `created_at`, `created_by`  
-- **stock_movements**: `event_id, cantina_id, product_id (uuid)`, `qty (int)`, `type`, `reason`, `created_by`, `created_at`  
-  - `type`: `'INIT' | 'SALE' | 'ADJUSTMENT' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'WASTE' | 'RETURN'`  
-- **sales**: `id (uuid)`, `event_id, cantina_id, user_id (uuid)`, `created_at`, `total_items (int)`, `total_cents (int)`, `status ('OK'|'VOID')`, `client_request_id (uuid)`  
-- **sale_line_items**: `sale_id (uuid)`, `product_id (uuid)`, `qty (int)`, `unit_price_cents (int)`, `line_total_cents (int)`
+Acceso vía `/login` → selección de evento → cantina → PIN.
+
+| Pestaña | Funcionalidad |
+|---------|---------------|
+| **💰 Venta** | Grid de productos activos · carrito con `+/−/Vaciar` · botón **Cobrar** con UI optimista · carrito móvil deslizable (drawer) · ordenación por SKU |
+| **📦 Stock** | Stock actual con semáforo (🟢 OK / 🟡 Bajo / 🔴 Agotado) · **Inventario Inicial** (fijación en lote) · **Ajustes** de stock (tipo: `ADJUSTMENT`, `TRANSFER_IN`, `TRANSFER_OUT`, `WASTE`, `RETURN`) · **Inventario Final** (sugerido automático con opción de edición manual) |
+| **📝 Historial** | Últimas 15 ventas como tarjetas expandibles con detalle de líneas y subtotales |
+
+**Características extra del POS:**
+- ☁️ **Modo offline**: ventas se guardan localmente y se sincronizan al volver online.
+- 🔔 Indicador de **ventas pendientes** en el header con botón de sincronización manual.
+- 🔄 **Realtime**: el inventario se refresca automáticamente vía WebSocket.
+- 🚪 **Cerrar sesión** desde el header.
+
+---
+
+### 🔧 Rol: Administrador
+
+Acceso directo vía `/admin`.
+
+| Pestaña | Funcionalidad |
+|---------|---------------|
+| **⚙️ General** | Editar nombre y fecha del evento |
+| **🏪 Cantinas** | Listar cantinas · toggle de asignación al evento · **crear nuevas cantinas** con PIN y asignación inmediata |
+| **🛍️ Catálogo** | Gestionar productos del evento: **precio**, **umbral de stock bajo**, **activar/desactivar** · crear productos globales y asignarlos · ordenación por SKU |
+| **📦 Inventario** | Selector de cantina · mismas acciones que POS (inicial, ajustes, final) |
+| **📈 Panel** | Selector de cantina · **métricas**: tickets, artículos vendidos, facturación (€) · stock por artículo con semáforo · **historial de ventas** (últimas 15) como tarjetas expandibles · Realtime |
+| **🌍 Global** | Vista consolidada del inventario de **todas las cantinas** · **exportación a Excel** desde plantilla personalizada (`plantilla_inventario.xlsx`) |
+
+**Características extra del Admin:**
+- 🔔 **Campana de notificaciones** en el header con alertas en tiempo real cuando el stock de un producto cae por debajo del umbral definido. Las alertas son descartables individualmente o en bloque.
+- 📊 **Gestión de estados del evento**: cambiar entre `draft` → `live` → `closed` desde la lista de eventos.
+- 📱 **Responsive**: navegación por tabs con scroll horizontal en móvil.
+
+---
+
+## 3) Sistema de autenticación
+
+### Flujo de acceso (3 pasos)
+
+```
+/login
+  ├─ 1. Seleccionar evento (solo los que estén en estado "live")
+  ├─ 2. Seleccionar cantina (asignada al evento)
+  └─ 3. Introducir PIN de la cantina
+        └─ ✅ Redirige a /pos con sesión persistente
+```
+
+### PIN por cantina
+
+- Cada cantina tiene **un solo PIN** que funciona en **todos los eventos** (no cambia entre eventos).
+- La configuración del PIN se hace **una sola vez** por temporada o al crear la cantina.
+- El admin puede activar/desactivar el acceso de una cantina con `toggle_cantina_access`.
+
+### Estados de evento
+
+| Estado | Emoji | Acceso POS | Descripción |
+|--------|-------|------------|-------------|
+| `draft` | 📝 | ❌ | Planificación |
+| `live` | 🟢 | ✅ | Evento activo |
+| `closed` | 🔒 | ❌ | Evento finalizado |
+
+### Funciones SQL de autenticación
+
+```sql
+-- Configurar/actualizar PIN
+SELECT set_cantina_pin('<cantina_id>', '1234', true);
+
+-- Activar/desactivar acceso
+SELECT toggle_cantina_access('<cantina_id>', false);
+
+-- Validar acceso
+SELECT * FROM validate_cantina_access('<event_id>', '<cantina_id>', '1234');
+```
+
+---
+
+## 4) PWA y modo offline
+
+### Progressive Web App
+
+- **Manifest** (`public/manifest.json`): nombre `Cantina POS`, orientación portrait, iconos 192×512.
+- **Service Worker**: configurado con `@ducanh2912/next-pwa` + Workbox.
+  - Cache agresivo en navegación front-end.
+  - Recarga automática al recuperar conexión.
+- **Prompt de instalación** (`components/InstallPrompt.tsx`):
+  - **Android**: botón directo "Instalar Aplicación".
+  - **iOS**: instrucciones visuales paso a paso (Compartir → Añadir a inicio).
+
+### Offline-first (ventas)
+
+```
+Venta → ¿Online?
+  ├─ SÍ → createSale (RPC) → toast "Venta registrada" ✅
+  └─ NO → queueSale (IndexedDB) → toast "Guardado en el dispositivo" ☁️
+              └─ Al recuperar conexión → syncQueue automático
+```
+
+- Cola de ventas offline almacenada en **IndexedDB** via `idb-keyval`.
+- Sincronización automática al detectar evento `online`.
+- Botón manual de sync en el header del POS (con contador de pendientes).
+- UUID seguro con fallback manual para navegadores antiguos.
+
+### Persistencia de caché
+
+- **TanStack Query** con `PersistQueryClientProvider` respaldado por IndexedDB.
+- `staleTime`: 5 min (datos se consideran frescos).
+- `gcTime`: 24 h (datos disponibles offline durante un día completo).
+- Los productos del catálogo se cachean 30 min; el inventario se refresca en cada consulta.
+
+---
+
+## 5) Esquema de base de datos (Supabase)
+
+### Tablas principales
+
+| Tabla | Columnas clave |
+|-------|---------------|
+| `events` | `id`, `name`, `date`, `status` (`draft`/`live`/`closed`) |
+| `cantinas` | `id`, `name`, `location` |
+| `cantina_access` | `cantina_id`, `pin_code`, `is_active` |
+| `event_cantinas` | `event_id`, `cantina_id` (PK compuesta) |
+| `products` | `id`, `name`, `sku` |
+| `event_products` | `event_id`, `product_id` (PK compuesta), `price_cents`, `low_stock_threshold`, `active`, `sort_order` |
+| `inventory_snapshots` | `event_id`, `cantina_id`, `product_id`, `kind` (`INITIAL`/`FINAL`), `qty`, `created_at`, `created_by` |
+| `stock_movements` | `event_id`, `cantina_id`, `product_id`, `qty`, `type`, `reason`, `created_by`, `created_at` |
+| `sales` | `id`, `event_id`, `cantina_id`, `user_id`, `total_items`, `total_cents`, `status` (`OK`/`VOID`), `client_request_id` |
+| `sale_line_items` | `sale_id`, `product_id`, `qty`, `unit_price_cents`, `line_total_cents` |
+
+> **Tipos de movimiento** (`stock_movements.type`):
+> `INIT` · `SALE` · `ADJUSTMENT` · `TRANSFER_IN` · `TRANSFER_OUT` · `WASTE` · `RETURN`
 
 ### Vistas
 
-- **v_cantina_inventory**  
-  `event_id, cantina_id, product_id, current_qty, low_stock_threshold` (stock actual por producto/cantina).
-
-- **v_sales_by_cantina**  
-  `event_id, cantina_id, num_sales, total_items, total_cents` (agregado por cantina).
-
-- **v_top_products** *(opcional)*  
-  Agregado por producto (unidades e ingresos) para ranking.
+| Vista | Descripción |
+|-------|-------------|
+| `v_cantina_inventory` | Stock actual por producto/cantina (derivado de movimientos) |
+| `v_sales_by_cantina` | Métricas agregadas de ventas por cantina |
 
 ### Funciones RPC (PL/pgSQL)
 
-- **create_sale**: crea ticket, líneas y descuenta stock (tipo `SALE`), con idempotencia.  
-- **set_initial_inventory_bulk**: fija snapshot `INITIAL` y añade un `ADJUSTMENT` por la diferencia (evita negativo).  
-- **adjust_stock_bulk**: entradas/salidas al stock actual (tipos permitidos, valida no negativo).  
-- **set_final_inventory_bulk**: fija snapshot `FINAL` editable para cierre/reconciliación.
-
-> **Realtime**: activar en `stock_movements` (Database → Replication → Realtime).  
-> **RLS**: para producción, definir políticas por rol (admin/cantina) y ámbito (evento/cantina).
+| Función | Descripción |
+|---------|-------------|
+| `create_sale` | Crea ticket + líneas + movimientos negativos (`SALE`). Idempotente por `client_request_id` |
+| `set_initial_inventory_bulk` | Fija snapshot `INITIAL` + ajuste por diferencia |
+| `adjust_stock_bulk` | Entradas/salidas manuales (validación de stock no negativo) |
+| `set_final_inventory_bulk` | Fija snapshot `FINAL` editable para cierre |
+| `set_cantina_pin` | Configura PIN de acceso de una cantina |
+| `toggle_cantina_access` | Activa/desactiva acceso de una cantina |
+| `validate_cantina_access` | Valida credenciales de una cantina para un evento |
 
 ---
 
-## 4) Estructura del proyecto (Next.js, App Router)
+## 6) Estructura del proyecto
 
 ```
-app/
-  page.tsx                        # Home con accesos a Cantina y Administración
-  pos/page.tsx                    # Vista Cantina (tabs: Venta, Inventario, Ventas)
-  admin/
-    page.tsx                      # Listado de eventos + crear evento
-    [eventId]/page.tsx            # Detalle evento (General, Cantinas, Catálogo, Inventario, Panel)
-
-components/
-  CantinaPOS.tsx                  # (si se usa) POS como componente
-
-hooks/
-  useLiveInventory.ts             # suscripción Realtime a stock_movements
-
-lib/
-  supabaseClient.ts               # cliente Supabase (createClient)
-  sales.ts                        # cliente para RPC create_sale
-
-public/
-  favicon.ico
-
-styles/
-  app/globals.css                 # estilos base (Tailwind opcional)
-
-DESIGN.md                         # guía de diseño (paleta Elche CF, tarjetas y sombras)
+stock-cantinas/
+├── app/
+│   ├── layout.tsx                     # Root layout (PWA meta, Inter font, Providers)
+│   ├── providers.tsx                  # TanStack Query + IndexedDB persister
+│   ├── page.tsx                       # Redirect → /login
+│   ├── globals.css                    # CSS base
+│   │
+│   ├── login/
+│   │   ├── page.tsx                   # Flujo 3 pasos (evento → cantina → PIN)
+│   │   ├── hooks/useLogin.ts          # Lógica de autenticación
+│   │   └── components/
+│   │       ├── EventSelector.tsx      # Paso 1: seleccionar evento
+│   │       ├── CantinaSelector.tsx    # Paso 2: seleccionar cantina
+│   │       └── PinInput.tsx           # Paso 3: introducir PIN
+│   │
+│   ├── pos/
+│   │   ├── page.tsx                   # POS principal (3 pestañas)
+│   │   ├── hooks/
+│   │   │   ├── usePosSession.ts       # Sesión activa + validación
+│   │   │   ├── usePosData.ts          # Productos, inventario, totales (TanStack Query)
+│   │   │   ├── useCart.ts             # Estado del carrito
+│   │   │   ├── useOfflineSales.ts     # Cola offline (IndexedDB)
+│   │   │   └── usePosHistory.ts       # Historial de ventas
+│   │   └── components/
+│   │       ├── PosHeader.tsx          # Header con sync + logout
+│   │       ├── PosSalesTab.tsx        # Grid productos + carrito desktop
+│   │       ├── ProductCard.tsx        # Tarjeta de producto individual
+│   │       ├── CartSidebar.tsx        # Carrito lateral (desktop)
+│   │       ├── MobileCartDrawer.tsx   # Carrito deslizable (móvil)
+│   │       ├── PosInventoryTab.tsx    # Gestión de inventario completa
+│   │       └── PosHistoryTab.tsx      # Historial de ventas expandible
+│   │
+│   └── admin/
+│       ├── page.tsx                   # Lista de eventos + crear evento + gestión de estado
+│       ├── [eventId]/page.tsx         # Detalle evento (6 pestañas)
+│       ├── hooks/
+│       │   ├── useAdminEvents.ts      # CRUD eventos + cambio de estado
+│       │   ├── useAdminEvent.ts       # Datos de un evento
+│       │   ├── useAdminCantinas.ts    # Gestión cantinas + asignación
+│       │   ├── useAdminCatalog.ts     # Gestión catálogo productos
+│       │   ├── useAdminInventory.ts   # Inventario desde admin
+│       │   ├── useAdminMetrics.ts     # Métricas panel + historial ventas
+│       │   └── useStockNotifications.ts # Alertas de stock bajo (Realtime)
+│       └── components/
+│           ├── AdminHeader.tsx        # Header con navegación + NotificationBell
+│           ├── CreateEventForm.tsx    # Formulario nuevo evento
+│           ├── EventsList.tsx         # Lista eventos con selector de estado
+│           ├── EventGeneralTab.tsx    # Tab: editar evento
+│           ├── EventCantinasTab.tsx   # Tab: gestión cantinas
+│           ├── EventCatalogTab.tsx    # Tab: catálogo productos
+│           ├── EventInventoryTab.tsx  # Tab: inventario por cantina
+│           ├── EventPanelTab.tsx      # Tab: métricas + historial ventas
+│           ├── EventGlobalTab.tsx     # Tab: inventario global + exportar Excel
+│           └── NotificationBell.tsx   # Campana de notificaciones in-app
+│
+├── components/
+│   └── InstallPrompt.tsx              # Prompt de instalación PWA (iOS/Android)
+│
+├── hooks/
+│   └── useLiveInventory.ts            # Suscripción Realtime a stock_movements
+│
+├── lib/
+│   ├── supabaseClient.ts             # Cliente Supabase (createClient)
+│   ├── sales.ts                       # RPC create_sale con UUID seguro
+│   └── exportUtils.ts                 # Exportación Excel desde plantilla
+│
+├── database/
+│   └── migrations/
+│       ├── update_cantina_auth_single_pin.sql  # Migración PIN único
+│       └── setup_single_pin_credentials.sql    # Script configuración PINs
+│
+├── public/
+│   ├── manifest.json                  # Manifest PWA
+│   ├── sw.js                          # Service Worker
+│   ├── plantilla_inventario.xlsx      # Plantilla Excel para exportación
+│   ├── android-chrome-*.png           # Iconos PWA
+│   └── apple-touch-icon.png           # Icono iOS
+│
+├── DESIGN.md                          # Guía de diseño (paleta Elche CF)
+├── tailwind.config.ts                 # Configuración Tailwind (tokens Elche CF)
+├── next.config.ts                     # Configuración Next.js + PWA
+└── package.json
 ```
 
-**Tecnologías**: Next.js (App Router), React, Supabase JS (PostgREST + RPC), Realtime.  
-**Estilos**: CSS inline (MVP). Tailwind opcional (ya documentado cómo activarlo).
+---
+
+## 7) Stack tecnológico
+
+| Capa | Tecnología | Versión |
+|------|-----------|---------|
+| **Framework** | Next.js (App Router) | 16.x |
+| **UI** | React | 19.x |
+| **Estilos** | Tailwind CSS | 4.x |
+| **Tipografía** | Inter (Google Fonts) | — |
+| **Backend** | Supabase (PostgREST + RPC + Realtime) | — |
+| **State management** | TanStack React Query | 5.x |
+| **Persistencia offline** | `idb-keyval` + TanStack Persist | — |
+| **PWA** | `@ducanh2912/next-pwa` + Workbox | — |
+| **Exportación** | ExcelJS + FileSaver | — |
+| **Notificaciones UI** | react-hot-toast | — |
+| **Lenguaje** | TypeScript | 5.x |
 
 ---
 
-## 5) Variables de entorno
+## 8) Arranque local
 
-Crea **`.env.local`** en la raíz del proyecto:
+### Requisitos previos
 
-```
-NEXT_PUBLIC_SUPABASE_URL=https://<tu-proyecto>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<tu-anon-key>
+- **Node.js** 18+
+- Proyecto **Supabase** operativo con tablas, vistas y funciones RPC creadas
+- **Realtime** activado en la tabla `stock_movements` (Database → Replication → Realtime)
 
-# MVP sin auth: IDs fijos de trabajo (sustituir por Auth en fase 2)
-NEXT_PUBLIC_EVENT_ID=<uuid-evento>
-NEXT_PUBLIC_CANTINA_ID=<uuid-cantina>
-NEXT_PUBLIC_APP_USER_ID=<uuid-usuario-app>
-```
+### Instalación
 
-> Requiere reiniciar `npm run dev` tras cambios en `.env.local`.
-
----
-
-## 6) Arranque local (Quickstart)
-
-1. **Requisitos**: Node 18+, proyecto Supabase operativo.
-2. **Base de datos**: crea tablas, vistas y RPC (ver §3). Activa **Realtime** en `stock_movements`.
-3. **Semillas mínimas**:
-   - `events`: crea un evento (ej. “Jornada 1”, fecha de hoy).
-   - `cantinas`: crea “Cantina Norte”.  
-   - `event_cantinas`: asigna la cantina al evento.  
-   - `products`: *Agua, Cocacola, Palomitas, Bocatas*.  
-   - `event_products`: añade cada producto con `price_cents`, `low_stock_threshold`, `active=true`.  
-   - `inventory_snapshots (INITIAL)`: cantidades iniciales por producto/cantina.
-4. **Instalación y ejecución**:
-   ```bash
-   npm i
-   npm run dev
-   ```
-5. **Rutas principales**:
-   - `http://localhost:3000/pos` — modo Cantina.  
-   - `http://localhost:3000/admin` — modo Administrador.
-
----
-
-## 7) Detalles de implementación (frontend)
-
-### POS (`app/pos/page.tsx`)
-
-- **Productos del evento**: `from('event_products').select('product_id, price_cents, products(name)')` con filtros por `event_id` y `active`.
-- **Semáforo y stock**: se apoya en `v_cantina_inventory` (qty vs threshold).  
-- **Realtime**: `useLiveInventory(eventId, cantinaId)` vuelve a pedir inventario al recibir cambios.  
-- **Venta**: `createSale(eventId, cantinaId, userId, lines)` → RPC `create_sale`.  
-- **Historial de ventas (arreglado)**: consulta `sales` **con** relación `sale_line_items`, calcula totales y muestra detalle con paginación.  
-- **Inventario**:  
-  - **Inicial**: `set_initial_inventory_bulk`.  
-  - **Ajustes**: `adjust_stock_bulk` (valida no negativo).  
-  - **Final**: `set_final_inventory_bulk` (editable).
-
-### Admin (`app/admin/[eventId]/page.tsx`)
-
-- **General**: editar nombre/fecha del evento.  
-- **Cantinas**: listado y **toggle** de asignación (`event_cantinas`); **crear cantina** y asignar.  
-- **Catálogo**: editar `price_cents`, `low_stock_threshold`, `active`; **crear producto global** y añadirlo al evento.  
-- **Inventario (por cantina)**: idéntico a Cantina (inicial, ajustes, final).  
-- **Panel de métricas por cantina**:  
-  - Selector de **cantina**.  
-  - Totales desde `v_sales_by_cantina` (tickets, artículos, facturación).  
-  - Stock por artículo: `v_cantina_inventory` + nombres de `event_products -> products`.  
-  - **Realtime** de stock.
-
----
-
-## 8) Buenas prácticas y seguridad
-
-- **Idempotencia** en ventas con `client_request_id` (UUID).  
-- **Stock derivado** (no almacenar stock actual materializado).  
-- **RLS** (en producción): políticas por rol (admin/cantina) y ámbito (evento/cantina).  
-- **Moneda**:  
-  - Actual: `price_cents` (enteros).  
-  - Alternativa: euros `NUMERIC(12,2)` (revisar redondeos y RPC).
-
----
-
-## 9) Sistema de Autenticación por Cantina (⭐ ACTUALIZADO v2.0)
-
-Se ha implementado un sistema completo de autenticación que permite a cada cantina acceder de forma segura a su punto de venta.
-
-### ✨ Novedades v2.0:
-- ✅ **PIN único por cantina**: Cada cantina tiene UN solo código que funciona en todos los eventos (no cambia entre eventos)
-- ✅ **Panel de administrador mejorado**: Cambiar estado del evento directamente desde la UI
-- ✅ **Gestión simplificada**: Configurar credenciales una sola vez por temporada
-
-### Características principales:
-- ✅ **Login por PIN**: Cada cantina tiene un código único que mantiene siempre
-- ✅ **Restricción por estado**: Solo eventos en "live" permiten acceso
-- ✅ **Flujo en 3 pasos**: Evento → Cantina → PIN
-- ✅ **Sesión persistente**: Se mantiene hasta cerrar sesión
-- ✅ **Validación automática**: Verifica estado del evento al acceder al POS
-- ✅ **Panel admin**: Selector de estado del evento (draft/live/closed)
-- ✅ **Botón de cerrar sesión**: En el header del POS
-
-### Estados de Evento:
-| Estado | Emoji | Acceso POS | Gestión desde Admin |
-|--------|-------|------------|---------------------|
-| `draft` | 📝 | ❌ Bloqueado | Planificación |
-| `live` | 🟢 | ✅ Permitido | Evento activo |
-| `closed` | 🔒 | ❌ Bloqueado | Evento finalizado |
-
-### Archivos relacionados:
-- 📄 `database/migrations/update_cantina_auth_single_pin.sql` - **Nueva** migración a PIN único
-- 📄 `database/migrations/setup_single_pin_credentials.sql` - Script de configuración actualizado
-- 📄 `app/login/page.tsx` - Página de login (actualizada)
-- 📄 `app/pos/page.tsx` - POS con validación de sesión
-- 📄 `app/admin/page.tsx` - Panel admin con selector de estado
-- 📄 `AUTH_UPDATE_V2.md` - **Documentación de la actualización v2.0**
-- 📄 `AUTH_SYSTEM.md` - Documentación completa del sistema original
-- 📄 `AUTH_QUICK_START.md` - Guía rápida visual
-
-### Inicio rápido:
 ```bash
-# 1. Ejecutar nueva migración en Supabase SQL Editor
-database/migrations/update_cantina_auth_single_pin.sql
+# 1. Clonar repositorio
+git clone <repo-url>
+cd stock-cantinas
 
-# 2. Configurar PINs (una sola vez por cantina)
+# 2. Instalar dependencias
+npm install
+
+# 3. Configurar variables de entorno
+cp .env.local.example .env.local
+# Editar .env.local con tus credenciales de Supabase
+
+# 4. Ejecutar en desarrollo
+npm run dev
+```
+
+### Configurar base de datos
+
+```bash
+# 1. Ejecutar las migraciones en Supabase SQL Editor:
+#    - database/migrations/update_cantina_auth_single_pin.sql
+#    - database/migrations/setup_single_pin_credentials.sql
+
+# 2. Configurar un PIN para la cantina (ejemplo)
 SELECT set_cantina_pin(
   (SELECT id FROM cantinas WHERE name = 'Cantina Norte'),
   '1234',
@@ -273,77 +349,76 @@ SELECT set_cantina_pin(
 );
 
 # 3. Cambiar estado del evento a "live"
-# Opción A: Desde /admin (UI)
-# Opción B: SQL manual
-UPDATE events SET status = 'live' WHERE id = '<event_id>';
-
-# 4. Acceder a /login y usar el mismo PIN para todos los eventos
+UPDATE events SET status = 'live' WHERE name = 'Jornada 1';
 ```
 
-### Funciones SQL útiles:
-```sql
--- Configurar o actualizar PIN de una cantina
-SELECT set_cantina_pin('<cantina_id>', '1234', true);
+### Rutas principales
 
--- Activar/desactivar acceso de una cantina
-SELECT toggle_cantina_access('<cantina_id>', false);
+| Ruta | Descripción |
+|------|-------------|
+| `/login` | Login cantina (3 pasos) |
+| `/pos` | Punto de Venta (requiere sesión) |
+| `/admin` | Panel de administración |
+| `/admin/[eventId]` | Detalle de un evento (6 pestañas) |
 
--- Ver todas las credenciales configuradas
-SELECT c.name, ca.pin_code, ca.is_active 
-FROM cantinas c
-LEFT JOIN cantina_access ca ON ca.cantina_id = c.id;
+---
 
--- Probar autenticación
-SELECT * FROM validate_cantina_access(
-  '<event_id>'::uuid,
-  '<cantina_id>'::uuid,
-  '1234'
-);
+## 9) Variables de entorno
+
+Crear **`.env.local`** en la raíz:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://<tu-proyecto>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<tu-anon-key>
 ```
 
-### Para Administradores:
-1. **Ir a `/admin`**
-2. **Ver lista de eventos con selector de estado**
-3. **Cambiar estado con un clic**: 📝 BORRADOR → 🟢 EN VIVO → 🔒 CERRADO
-4. **Configurar**: Clic en "Configurar →" para gestionar cantinas, catálogo, etc.
-
-Ver `AUTH_UPDATE_V2.md` para documentación completa de la actualización.
+> ⚠️ Requiere reiniciar `npm run dev` tras cambios en `.env.local`.
 
 ---
 
-## 10) Roadmap sugerido
+## 10) Guía de diseño
 
-1. **Autenticación y roles** (Supabase Auth + RLS por claims).  
-2. **Cierre de evento** (bloqueo de ventas/movimientos, snapshot final y reporte de diferencias).  
-3. **Transferencias entre cantinas** (flujo solicitud/aceptación con `TRANSFER_OUT/IN`).  
-4. **Devoluciones / anulación de ticket** (estado `VOID` y compensaciones de stock).  
-5. **Reportes** (CSV/Excel, ingresos por hora, top productos, rotación).  
-6. **UX/Atajos** (filtros “solo bajo stock”, teclado numérico, búsqueda).  
-7. **Integración TPV** (métodos de pago y cuadre de caja).  
-8. **Tests** (RPC, UI con fixtures de Supabase local).
+El diseño está basado en los colores oficiales del **Elche CF**, definidos como tokens en Tailwind:
 
----
+| Token | Color | Uso |
+|-------|-------|-----|
+| `elche-primary` | `#00964f` | Verde principal |
+| `elche-secondary` | `#007a3d` | Verde oscuro (hover, gradientes) |
+| `elche-accent` | `#20b368` | Verde claro/brillante |
+| `elche-bg` | `#f5f9f7` | Fondo general |
+| `elche-surface` | `#ffffff` | Fondo tarjetas |
+| `elche-text` | `#1a2e1f` | Texto principal |
+| `elche-text-muted` | `#4a5f52` | Texto secundario |
+| `elche-border` | `#e8f4ee` | Bordes |
+| `elche-warning` | `#fbbf24` | Stock bajo (ámbar) |
+| `elche-danger` | `#ef4444` | Agotado / Error |
 
-## 10) Troubleshooting
+**Convenciones**:
+- Bordes redondeados: 8px → 24px según nivel de componente.
+- Headers con gradiente `from-elche-primary to-elche-secondary`.
+- Semáforo de stock: 🟢 OK (`≥ umbral`) · 🟡 Bajo (`< umbral`) · 🔴 Agotado (`= 0`).
+- Emojis como iconografía funcional.
 
-- **Semáforo no cambia** → habilitar Realtime en `stock_movements`; `useLiveInventory` correctamente parametrizado; ejecutar `fetchInventory()` al evento.  
-- **Historial de ventas vacío** → usar relación **`sale_line_items`** y verificar `event_id`/`cantina_id`.  
-- **Variables NEXT_PUBLIC_* salen undefined** → definir en `.env.local` (sin comillas) y reiniciar dev server.  
-- **RLS bloquea inserts** → revisar políticas y claims. En MVP, usar `anon` con filtros por `event_id`/`cantina_id` o desactivar temporalmente para pruebas.
-
----
-
-## 11) Puntos de entrada para otra IA (continuar desarrollo)
-
-- **Dominio**: stock derivado por **movimientos**; snapshots para **auditoría**.  
-- **Frontend**: Next.js App Router; vistas por rol; **Realtime** en inventario.  
-- **Backend**: Supabase RPC + vistas; **idempotencia** de ventas; **threshold** para semáforo.  
-- **Extensiones**: cierre de evento, transferencias, auth/RLS, reporting avanzado.
+Ver [`DESIGN.md`](DESIGN.md) para la guía completa.
 
 ---
 
-## 12) Licencia / Créditos
+## 11) Troubleshooting
 
-- Tecnologías: Next.js, Supabase, Realtime.  
-- Diseño: ver `DESIGN.md` (paleta Elche CF, tarjetas y sombras).  
-- Licencia: definir según necesidades del proyecto.
+| Problema | Solución |
+|----------|----------|
+| Semáforo no cambia | Activar Realtime en `stock_movements`; verificar `useLiveInventory` |
+| Historial de ventas vacío | Verificar relación `sale_line_items` y filtros `event_id`/`cantina_id` |
+| Variables `NEXT_PUBLIC_*` undefined | Definir en `.env.local` (sin comillas) y reiniciar dev server |
+| RLS bloquea inserts | Revisar políticas y claims; en desarrollo desactivar temporalmente |
+| Ventas offline no sincronizan | Verificar IndexedDB en DevTools; usar botón de sync manual en header |
+| PWA no muestra prompt de instalación | Verificar HTTPS (o localhost); revisar `manifest.json` |
+| Exportación Excel no funciona | Verificar que `public/plantilla_inventario.xlsx` existe |
+
+---
+
+## Licencia / Créditos
+
+- **Tecnologías**: Next.js, React, Supabase, TanStack Query, Tailwind CSS.
+- **Diseño**: inspirado en los colores del Elche CF (ver [`DESIGN.md`](DESIGN.md)).
+- **Licencia**: definir según necesidades del proyecto.
