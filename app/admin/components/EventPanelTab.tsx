@@ -76,7 +76,9 @@ export default function EventPanelTab({
           <thead>
             <tr className="bg-elche-gray/20 text-elche-text-light text-xs font-bold uppercase tracking-wider">
               <th className="p-4 text-left">Producto</th>
+              <th className="p-4 text-right">Inv. Inicial</th>
               <th className="p-4 text-right">Stock</th>
+              <th className="p-4 text-right">Vendidos</th>
               <th className="p-4 text-right">Umbral</th>
               <th className="p-4 text-center">Estado</th>
             </tr>
@@ -88,7 +90,11 @@ export default function EventPanelTab({
               return (
                 <tr key={r.product_id} className="hover:bg-elche-gray/5 transition-colors">
                   <td className="p-4 text-elche-text font-bold">{r.name}</td>
+                  <td className="p-4 text-right font-mono text-elche-text-light font-medium">{r.initial_qty !== null ? r.initial_qty : '—'}</td>
                   <td className="p-4 text-right font-mono font-bold text-lg text-elche-text">{r.current_qty}</td>
+                  <td className="p-4 text-right font-mono font-bold text-elche-primary">
+                    {r.initial_qty !== null ? Math.max(0, r.initial_qty - r.current_qty) : '—'}
+                  </td>
                   <td className="p-4 text-right font-mono text-elche-text-light font-medium">{r.low_stock_threshold}</td>
                   <td className="p-4 text-center">
                     <span className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm ${status === 'ok' ? 'bg-elche-success/10 text-elche-success border border-elche-success/20' :

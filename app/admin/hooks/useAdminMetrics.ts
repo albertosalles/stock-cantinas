@@ -13,7 +13,9 @@ export interface CantinaMetrics {
 export interface PanelRow {
   product_id: string;
   name: string;
+  sku: string;
   current_qty: number;
+  initial_qty: number | null;
   low_stock_threshold: number
 }
 
@@ -71,29 +73,44 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
   }
 
   async function fetchPanelData(cantinaId: string) {
-    // Stock Rows
-    const { data: inv } = await supabase
-      .from('v_cantina_inventory')
-      .select('product_id, current_qty, low_stock_threshold')
-      .match({ event_id: eventId, cantina_id: cantinaId });
+    // Fetch stock, products and initial inventory in parallel
+    const [invRes, prodsRes, initRes] = await Promise.all([
+      supabase
+        .from('v_cantina_inventory')
+        .select('product_id, current_qty, low_stock_threshold')
+        .match({ event_id: eventId, cantina_id: cantinaId }),
+      supabase
+        .from('event_products')
+        .select('product_id, low_stock_threshold, products(name, sku)')
+        .eq('event_id', eventId)
+        .eq('active', true),
+      supabase
+        .from('inventory_snapshots')
+        .select('product_id, qty')
+        .match({ event_id: eventId, cantina_id: cantinaId, kind: 'INITIAL' })
+    ]);
 
-    const invMap = new Map(inv?.map((r: any) => [r.product_id, r]) ?? []);
+    const invMap = new Map(invRes.data?.map((r: any) => [r.product_id, r]) ?? []);
+    const initMap = new Map(initRes.data?.map((r: any) => [r.product_id, r.qty as number]) ?? []);
 
-    const { data: prods } = await supabase
-      .from('event_products')
-      .select('product_id, low_stock_threshold, products(name)')
-      .eq('event_id', eventId)
-      .eq('active', true)
-      .order('products(name)');
-
-    const rows = (prods ?? []).map((ep: any) => {
+    const rows = (prodsRes.data ?? []).map((ep: any) => {
       const r = invMap.get(ep.product_id);
+      const initialQty = initMap.get(ep.product_id);
       return {
         product_id: ep.product_id,
         name: ep.products?.name ?? '—',
+        sku: ep.products?.sku ?? '',
         current_qty: r?.current_qty ?? 0,
+        initial_qty: initialQty ?? null,
         low_stock_threshold: (r?.low_stock_threshold ?? ep.low_stock_threshold ?? 0)
       };
+    });
+
+    // Sort by SKU (alphanumeric) — same pattern as usePosData
+    rows.sort((a: PanelRow, b: PanelRow) => {
+      const skuA = String(a.sku || '');
+      const skuB = String(b.sku || '');
+      return skuA.localeCompare(skuB, undefined, { numeric: true });
     });
     setPanelRows(rows);
 

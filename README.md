@@ -74,7 +74,7 @@ Acceso directo vía `/admin`.
 | **🏪 Cantinas** | Listar cantinas · toggle de asignación al evento · **crear nuevas cantinas** con PIN y asignación inmediata |
 | **🛍️ Catálogo** | Gestionar productos del evento: **precio**, **umbral de stock bajo**, **activar/desactivar** · crear productos globales y asignarlos · ordenación por SKU |
 | **📦 Inventario** | Selector de cantina · mismas acciones que POS (inicial, ajustes, final) |
-| **📈 Panel** | Selector de cantina · **métricas**: tickets, artículos vendidos, facturación (€) · stock por artículo con semáforo · **historial de ventas** (últimas 15) como tarjetas expandibles · Realtime |
+| **📈 Panel** | Selector de cantina · **métricas**: tickets, artículos vendidos, facturación (€) · stock por artículo con semáforo y columnas **Inv. Inicial**, **Stock**, **Vendidos** (Inicial − Actual) · ordenación por **SKU** · **historial de ventas** (últimas 15) como tarjetas expandibles · Realtime |
 | **🌍 Global** | Vista consolidada del inventario de **todas las cantinas** · **exportación a Excel** desde plantilla personalizada (`plantilla_inventario.xlsx`) |
 
 **Características extra del Admin:**
@@ -86,7 +86,7 @@ Acceso directo vía `/admin`.
 
 ## 3) Sistema de autenticación
 
-### Flujo de acceso (3 pasos)
+### Flujo de acceso cantina (3 pasos)
 
 ```
 /login
@@ -95,6 +95,16 @@ Acceso directo vía `/admin`.
   └─ 3. Introducir PIN de la cantina
         └─ ✅ Redirige a /pos con sesión persistente
 ```
+
+### Acceso administrador
+
+```
+/login → 🔧 Acceso Administración
+  └─ Introducir contraseña de administrador
+        └─ ✅ Redirige a /admin con sesión (sessionStorage)
+```
+
+La contraseña de admin se configura en la variable de entorno **`ADMIN_PASSWORD`** (server-side only, nunca se expone al navegador). La validación se realiza mediante la API route `/api/admin-login`. Las rutas `/admin` y `/admin/[eventId]` están protegidas con `useAdminGuard`.
 
 ### PIN por cantina
 
@@ -219,6 +229,9 @@ stock-cantinas/
 │   │       ├── CantinaSelector.tsx    # Paso 2: seleccionar cantina
 │   │       └── PinInput.tsx           # Paso 3: introducir PIN
 │   │
+│   ├── api/
+│   │   └── admin-login/route.ts       # API validación contraseña admin
+│   │
 │   ├── pos/
 │   │   ├── page.tsx                   # POS principal (3 pestañas)
 │   │   ├── hooks/
@@ -245,8 +258,9 @@ stock-cantinas/
 │       │   ├── useAdminCantinas.ts    # Gestión cantinas + asignación
 │       │   ├── useAdminCatalog.ts     # Gestión catálogo productos
 │       │   ├── useAdminInventory.ts   # Inventario desde admin
-│       │   ├── useAdminMetrics.ts     # Métricas panel + historial ventas
-│       │   └── useStockNotifications.ts # Alertas de stock bajo (Realtime)
+│       │   ├── useAdminMetrics.ts     # Métricas panel + historial ventas + vendidos
+│       │   ├── useStockNotifications.ts # Alertas de stock bajo (Realtime)
+│       │   └── useAdminGuard.ts       # Protección de rutas admin (sesión)
 │       └── components/
 │           ├── AdminHeader.tsx        # Header con navegación + NotificationBell
 │           ├── CreateEventForm.tsx    # Formulario nuevo evento
@@ -370,6 +384,9 @@ Crear **`.env.local`** en la raíz:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://<tu-proyecto>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<tu-anon-key>
+
+# Contraseña para acceso admin (server-side only)
+ADMIN_PASSWORD=tu-contraseña-admin
 ```
 
 > ⚠️ Requiere reiniciar `npm run dev` tras cambios en `.env.local`.

@@ -18,10 +18,12 @@ import { useAdminCantinas } from '../hooks/useAdminCantinas';
 import { useAdminCatalog } from '../hooks/useAdminCatalog';
 import { useAdminInventory } from '../hooks/useAdminInventory';
 import { useAdminMetrics } from '../hooks/useAdminMetrics';
+import { useAdminGuard } from '../hooks/useAdminGuard';
 
 type TabKey = 'general' | 'cantinas' | 'catalogo' | 'inventario' | 'panel' | 'global';
 
 export default function EventAdminPage() {
+  const checked = useAdminGuard();
   const params = useParams();
   const eventId = (params as { eventId: string }).eventId;
 
@@ -54,6 +56,17 @@ export default function EventAdminPage() {
       metricsLogic.fetchPanelData(metricsLogic.panelCantinaId);
     }
   };
+
+  if (!checked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-elche-bg">
+        <div className="text-center">
+          <div className="text-5xl mb-4 animate-pulse">⏳</div>
+          <div className="text-lg text-slate-600 font-medium">Verificando acceso...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-elche-bg pb-24 md:pb-0">
