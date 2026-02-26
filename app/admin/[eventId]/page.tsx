@@ -167,10 +167,7 @@ export default function EventAdminPage() {
             loading={inventoryLogic.loading}
             inventory={inventoryLogic.inventory}
             products={catalogLogic.eventProducts}
-
-            initForm={inventoryLogic.initForm}
-            setInitForm={inventoryLogic.setInitForm}
-            onSaveInit={inventoryLogic.saveInitialInventory}
+            eventId={eventId}
 
             adjustForm={inventoryLogic.adjustForm}
             setAdjustForm={inventoryLogic.setAdjustForm}

@@ -8,13 +8,12 @@ export type InventoryRow = { product_id: string; current_qty: number; low_stock_
 export function useAdminInventory(eventId: string, selectedCantinaId: string, products: EventProductRow[]) {
   const [inventory, setInventory] = useState<InventoryRow[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // Forms
-  const [initForm, setInitForm] = useState<Record<string, number>>({});
+
+  // Forms (Adjustments and Final only — Initial is handled by useAutoSaveInventory in component)
   const [adjustForm, setAdjustForm] = useState<Record<string, number>>({});
   const [finalForm, setFinalForm] = useState<Record<string, number>>({});
-  
-  const [adjustType, setAdjustType] = useState<'ADJUSTMENT'|'WASTE'|'TRANSFER_IN'|'TRANSFER_OUT'|'RETURN'>('ADJUSTMENT');
+
+  const [adjustType, setAdjustType] = useState<'ADJUSTMENT' | 'WASTE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'RETURN'>('ADJUSTMENT');
   const [adjustReason, setAdjustReason] = useState('Ajuste manual');
 
   const changes = useLiveInventory(eventId, selectedCantinaId);
@@ -22,7 +21,7 @@ export function useAdminInventory(eventId: string, selectedCantinaId: string, pr
   async function fetchInventoryData() {
     if (!selectedCantinaId) return;
     setLoading(true);
-    
+
     // Current Inventory
     const { data: inv } = await supabase
       .from('v_cantina_inventory')
@@ -37,43 +36,30 @@ export function useAdminInventory(eventId: string, selectedCantinaId: string, pr
       .eq('event_id', eventId)
       .eq('cantina_id', selectedCantinaId)
       .eq('kind', 'INITIAL');
-      
+
     const initMap: Record<string, number> = {};
     (initRows ?? []).forEach((row: any) => initMap[row.product_id] = row.qty);
 
     // Prepare forms
-    const initFormTemp: Record<string, number> = {};
     const finalFormTemp: Record<string, number> = {};
-    
+
     products.forEach(p => {
-      initFormTemp[p.product_id] = initMap[p.product_id] ?? 0;
       const curRow = inv?.find((i: any) => i.product_id === p.product_id);
       finalFormTemp[p.product_id] = curRow?.current_qty ?? 0;
     });
 
-    setInitForm(initFormTemp);
     setFinalForm(finalFormTemp);
     setAdjustForm({});
     setLoading(false);
   }
 
-  async function saveInitialInventory() {
-    const lines = Object.entries(initForm).map(([productId, qty]) => ({ productId, qty }));
-    const { error } = await supabase.rpc('set_initial_inventory_bulk', {
-      p_event_id: eventId,
-      p_cantina_id: selectedCantinaId,
-      p_user_id: process.env.NEXT_PUBLIC_APP_USER_ID,
-      p_lines: lines,
-    });
-    if (error) throw error;
-    await fetchInventoryData();
-  }
+
 
   async function applyAdjustments() {
     const lines = Object.entries(adjustForm)
       .filter(([, delta]) => delta && delta !== 0)
       .map(([productId, delta]) => ({ productId, delta, movementType: adjustType, reason: adjustReason }));
-      
+
     if (!lines.length) throw new Error('No hay ajustes');
 
     const { error } = await supabase.rpc('adjust_stock_bulk', {
@@ -83,7 +69,7 @@ export function useAdminInventory(eventId: string, selectedCantinaId: string, pr
       p_lines: lines,
     });
     if (error) throw error;
-    
+
     setAdjustForm({});
     await fetchInventoryData();
   }
@@ -107,12 +93,10 @@ export function useAdminInventory(eventId: string, selectedCantinaId: string, pr
   return {
     inventory,
     loading,
-    initForm, setInitForm,
     adjustForm, setAdjustForm,
     finalForm, setFinalForm,
     adjustType, setAdjustType,
     adjustReason, setAdjustReason,
-    saveInitialInventory,
     applyAdjustments,
     saveFinalInventory,
     fetchInventoryData

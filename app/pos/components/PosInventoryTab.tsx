@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { Product, InventoryRow } from '../hooks/usePosData';
+import { useAutoSaveInventory, SaveStatus } from '@/hooks/useAutoSaveInventory';
 
 interface PosInventoryTabProps {
   eventId: string;
@@ -12,37 +13,21 @@ interface PosInventoryTabProps {
 }
 
 export default function PosInventoryTab({ eventId, cantinaId, userId, products, inventory, onRefresh }: PosInventoryTabProps) {
-  // --- Estados Locales ---
-  const [initForm, setInitForm] = useState<Record<string, number | ''>>({});
+  // --- Auto-save para Inventario Inicial ---
+  const autoSave = useAutoSaveInventory({
+    eventId,
+    cantinaId,
+    userId,
+    productIds: products.map(p => p.id),
+    enabled: !!eventId && !!cantinaId && products.length > 0,
+  });
 
+  // --- Estados Locales (Ajustes y Final) ---
   const [adjustForm, setAdjustForm] = useState<Record<string, number>>({});
   const [adjustType, setAdjustType] = useState<'ADJUSTMENT' | 'WASTE' | 'TRANSFER_IN' | 'TRANSFER_OUT' | 'RETURN'>('ADJUSTMENT');
   const [adjustReason, setAdjustReason] = useState<string>('Ajuste manual');
 
   const [finalForm, setFinalForm] = useState<Record<string, number>>({});
-
-  // --- Effects ---
-
-  // Cargar inventario inicial
-  useEffect(() => {
-    if (!eventId || !cantinaId || products.length === 0) return;
-    (async () => {
-      const { data } = await supabase
-        .from('inventory_snapshots')
-        .select('product_id, qty')
-        .eq('event_id', eventId)
-        .eq('cantina_id', cantinaId)
-        .eq('kind', 'INITIAL');
-
-      const rows = data ?? [];
-      const map: Record<string, number | ''> = {};
-      products.forEach(p => {
-        const found = rows.find((r: any) => r.product_id === p.id);
-        map[p.id] = found ? found.qty : '';
-      });
-      setInitForm(map);
-    })();
-  }, [eventId, cantinaId, products]);
 
   // Pre-cargar form final con stock actual
   useEffect(() => {
@@ -56,26 +41,6 @@ export default function PosInventoryTab({ eventId, cantinaId, userId, products, 
   }, [inventory, products]);
 
   // --- Handlers ---
-
-  const saveInitial = async () => {
-    // FILTRAR: solo enviamos los productos que tengan un número válido (incluido 0).
-    // Los vacíos ('') se ignoran para no sobrescribir lo que otro usuario no haya tocado.
-    const lines = Object.entries(initForm)
-      .filter(([_, qty]) => qty !== '')
-      .map(([productId, qty]) => ({ productId, qty: Number(qty) }));
-
-    if (lines.length === 0) {
-      alert('No hay datos para guardar (campos vacíos se ignoran).');
-      return;
-    }
-
-    const { error } = await supabase.rpc('set_initial_inventory_bulk', {
-      p_event_id: eventId, p_cantina_id: cantinaId, p_user_id: userId, p_lines: lines
-    });
-    if (error) { alert(error.message); return; }
-    onRefresh();
-    alert('Inventario inicial actualizado ✅');
-  };
 
   const saveAdjustments = async () => {
     const lines = Object.entries(adjustForm)
@@ -113,49 +78,54 @@ export default function PosInventoryTab({ eventId, cantinaId, userId, products, 
   const incDelta = (pid: string, step = 1) => setAdjustForm(s => ({ ...s, [pid]: (s[pid] ?? 0) + step }));
   const decDelta = (pid: string, step = 1) => setAdjustForm(s => ({ ...s, [pid]: (s[pid] ?? 0) - step }));
 
-  // Helper para inventario inicial
-  const setInitVal = (pid: string, val: string | number) => {
-    setInitForm(s => ({ ...s, [pid]: val === '' ? '' : Number(val) }));
+  // Helper para indicador de estado
+  const statusIcon = (s: SaveStatus | undefined) => {
+    switch (s) {
+      case 'saving': return <span className="text-amber-500 text-xs animate-pulse" title="Guardando...">⏳</span>;
+      case 'saved': return <span className="text-elche-success text-xs" title="Guardado">✅</span>;
+      case 'error': return <span className="text-red-500 text-xs" title="Error al guardar">⚠️</span>;
+      default: return null;
+    }
   };
-  const incInit = (pid: string) => setInitForm(s => ({ ...s, [pid]: ((s[pid] === '' ? 0 : s[pid]) as number) + 1 }));
-  const decInit = (pid: string) => setInitForm(s => ({ ...s, [pid]: Math.max(0, ((s[pid] === '' ? 0 : s[pid]) as number) - 1) }));
 
   return (
     <section className="grid gap-6 pb-24 md:pb-0">
 
-      {/* ---- Inventario inicial ---- */}
+      {/* ---- Inventario inicial (AUTO-SAVE) ---- */}
       <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100">
-        <div className="font-bold text-xl mb-5 text-elche-text flex items-center gap-3">
+        <div className="font-bold text-xl mb-1 text-elche-text flex items-center gap-3">
           <span className="bg-elche-primary/10 text-elche-primary p-2 rounded-xl text-xl">📦</span> Inventario inicial
         </div>
+        <div className="text-xs text-elche-muted mb-5 ml-12 font-medium">Los cambios se guardan automáticamente</div>
         <div className="grid gap-2">
           {products.map(p => {
-            const value = initForm[p.id] ?? '';
+            const value = autoSave.form[p.id] ?? '';
+            const saveState = autoSave.status[p.id];
             return (
               <div key={p.id} className="flex flex-col md:flex-row md:items-center justify-between p-2 bg-elche-gray/30 rounded-2xl border border-elche-border/50 gap-2 hover:border-elche-primary/20 transition-colors">
-                <div>
-                  <div className="font-bold text-elche-text text-base">{p.name}</div>
-                  <div className="text-elche-muted text-sm font-medium">
-                    Precio: {(p.price_cents / 100).toFixed(2)} €
-                  
-                  
-                  
+                <div className="flex items-center gap-2">
+                  <div>
+                    <div className="font-bold text-elche-text text-base">{p.name}</div>
+                    <div className="text-elche-muted text-sm font-medium">
+                      Precio: {(p.price_cents / 100).toFixed(2)} €
+                    </div>
                   </div>
+                  {statusIcon(saveState)}
                 </div>
                 <div className="flex items-center gap-2 self-end md:self-auto bg-white p-1 rounded-lg border border-elche-border/50 shadow-sm">
                   <button
-                    onClick={() => decInit(p.id)}
+                    onClick={() => autoSave.decrement(p.id)}
                     className="w-8 h-8 rounded-md bg-elche-gray/20 text-elche-text font-bold active:scale-90 transition-transform flex items-center justify-center text-lg hover:bg-elche-gray/40">
                     −
                   </button>
                   <input
                     type="number" min={0} value={value}
                     placeholder="-"
-                    onChange={e => setInitVal(p.id, e.target.value)}
+                    onChange={e => autoSave.setValue(p.id, e.target.value)}
                     className="w-8 h-8 text-center font-bold border-none rounded-md bg-transparent focus:ring-0 p-0 text-base placeholder-gray-300"
                   />
                   <button
-                    onClick={() => incInit(p.id)}
+                    onClick={() => autoSave.increment(p.id)}
                     className="w-8 h-8 rounded-md bg-elche-gray/20 text-elche-text font-bold active:scale-90 transition-transform flex items-center justify-center text-lg hover:bg-elche-gray/40">
                     +
                   </button>
@@ -163,14 +133,6 @@ export default function PosInventoryTab({ eventId, cantinaId, userId, products, 
               </div>
             );
           })}
-        </div>
-        <div className="flex flex-col md:flex-row gap-3 mt-6 pt-4 border-t border-gray-100">
-          <button
-            onClick={saveInitial}
-            className="w-full md:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-elche-primary to-elche-secondary text-white font-bold shadow-lg shadow-elche-primary/30 active:scale-95 transition-all hover:shadow-elche-primary/40"
-          >
-            Guardar cambios
-          </button>
         </div>
       </div>
 

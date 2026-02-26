@@ -1,6 +1,7 @@
 import React from 'react';
 import { EventProductRow } from '../hooks/useAdminCatalog';
 import { InventoryRow } from '../hooks/useAdminInventory';
+import { useAutoSaveInventory, SaveStatus } from '@/hooks/useAutoSaveInventory';
 
 interface EventInventoryTabProps {
   cantinas: { id: string; name: string; assigned: boolean }[];
@@ -9,9 +10,7 @@ interface EventInventoryTabProps {
   loading: boolean;
   inventory: InventoryRow[];
   products: EventProductRow[];
-
-  initForm: Record<string, number>;
-  setInitForm: React.Dispatch<React.SetStateAction<Record<string, number>>>;
+  eventId: string;
 
   adjustForm: Record<string, number>;
   setAdjustForm: React.Dispatch<React.SetStateAction<Record<string, number>>>;
@@ -23,19 +22,37 @@ interface EventInventoryTabProps {
   finalForm: Record<string, number>;
   setFinalForm: React.Dispatch<React.SetStateAction<Record<string, number>>>;
 
-  onSaveInit: () => void;
   onApplyAdjust: () => void;
   onSaveFinal: () => void;
   onRefresh: () => void;
 }
 
 export default function EventInventoryTab({
-  cantinas, selectedCantinaId, setSelectedCantinaId, loading, inventory, products,
-  initForm, setInitForm, adjustForm, setAdjustForm, adjustType, setAdjustType, adjustReason, setAdjustReason,
-  finalForm, setFinalForm, onSaveInit, onApplyAdjust, onSaveFinal, onRefresh
+  cantinas, selectedCantinaId, setSelectedCantinaId, loading, inventory, products, eventId,
+  adjustForm, setAdjustForm, adjustType, setAdjustType, adjustReason, setAdjustReason,
+  finalForm, setFinalForm, onApplyAdjust, onSaveFinal, onRefresh
 }: EventInventoryTabProps) {
 
   const invMap = new Map(inventory.map(r => [r.product_id, r]));
+
+  // Auto-save for Initial Inventory
+  const autoSave = useAutoSaveInventory({
+    eventId,
+    cantinaId: selectedCantinaId,
+    userId: process.env.NEXT_PUBLIC_APP_USER_ID ?? '',
+    productIds: products.map(p => p.product_id),
+    enabled: !!selectedCantinaId && products.length > 0,
+  });
+
+  // Helper for status icon
+  const statusIcon = (s: SaveStatus | undefined) => {
+    switch (s) {
+      case 'saving': return <span className="text-amber-500 text-xs animate-pulse" title="Guardando...">⏳</span>;
+      case 'saved': return <span className="text-elche-success text-xs" title="Guardado">✅</span>;
+      case 'error': return <span className="text-red-500 text-xs" title="Error al guardar">⚠️</span>;
+      default: return null;
+    }
+  };
 
   return (
     <section className="bg-white p-6 rounded-3xl shadow-sm border border-elche-gray/50">
@@ -76,31 +93,37 @@ export default function EventInventoryTab({
       ) : (
         <div className="grid grid-cols-1 gap-8">
 
-          {/* INICIAL */}
+          {/* INICIAL (AUTO-SAVE) */}
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-elche-gray/50">
-            <div className="font-bold text-lg mb-4 text-elche-text flex items-center gap-2">
+            <div className="font-bold text-lg mb-1 text-elche-text flex items-center gap-2">
               <span className="bg-blue-100 text-blue-600 p-1.5 rounded-lg text-sm">🚀</span> Inventario Inicial
             </div>
+            <div className="text-xs text-elche-muted mb-4 ml-8 font-medium">Los cambios se guardan automáticamente</div>
             <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-              {products.map(p => (
-                <div key={p.product_id} className="flex justify-between items-center p-3 bg-elche-gray/10 rounded-2xl border border-elche-gray/30">
-                  <span className="font-semibold text-elche-text ml-2">{p.name}</span>
-                  <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-elche-gray/30 shadow-sm">
-                    <button onClick={() => setInitForm(s => ({ ...s, [p.product_id]: Math.max(0, (s[p.product_id] || 0) - 1) }))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">-</button>
-                    <input
-                      type="number"
-                      value={initForm[p.product_id] ?? 0}
-                      onChange={e => setInitForm(s => ({ ...s, [p.product_id]: parseInt(e.target.value || '0', 10) }))}
-                      className="w-16 text-center font-bold border-none focus:ring-0 p-0"
-                    />
-                    <button onClick={() => setInitForm(s => ({ ...s, [p.product_id]: (s[p.product_id] || 0) + 1 }))} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">+</button>
+              {products.map(p => {
+                const value = autoSave.form[p.product_id] ?? '';
+                const saveState = autoSave.status[p.product_id];
+                return (
+                  <div key={p.product_id} className="flex justify-between items-center p-3 bg-elche-gray/10 rounded-2xl border border-elche-gray/30">
+                    <div className="flex items-center gap-2 ml-2">
+                      <span className="font-semibold text-elche-text">{p.name}</span>
+                      {statusIcon(saveState)}
+                    </div>
+                    <div className="flex items-center gap-2 bg-white p-1 rounded-xl border border-elche-gray/30 shadow-sm">
+                      <button onClick={() => autoSave.decrement(p.product_id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">-</button>
+                      <input
+                        type="number"
+                        value={value}
+                        placeholder="-"
+                        onChange={e => autoSave.setValue(p.product_id, e.target.value)}
+                        className="w-16 text-center font-bold border-none focus:ring-0 p-0"
+                      />
+                      <button onClick={() => autoSave.increment(p.product_id)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 font-bold text-gray-500">+</button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-            <button onClick={onSaveInit} className="mt-4 w-full py-3 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all">
-              Guardar Inicial
-            </button>
           </div>
 
           {/* AJUSTES */}
