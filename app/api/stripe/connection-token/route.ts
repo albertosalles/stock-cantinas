@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import { getStripe } from '@/lib/stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    typescript: true,
-});
+export const dynamic = 'force-dynamic';
 
 export async function POST() {
     try {
-        const connectionToken = await stripe.terminal.connectionTokens.create();
+        const connectionToken = await getStripe().terminal.connectionTokens.create();
         return NextResponse.json({ secret: connectionToken.secret });
     } catch (error) {
         console.error('Error creating connection token:', error);

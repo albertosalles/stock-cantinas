@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
+import { getStripe } from '@/lib/stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-    typescript: true,
-});
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     try {
@@ -16,7 +14,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const paymentIntent = await stripe.paymentIntents.create({
+        const paymentIntent = await getStripe().paymentIntents.create({
             amount: Math.round(amount), // amount in cents
             currency: 'eur',
             payment_method_types: ['card_present'],
