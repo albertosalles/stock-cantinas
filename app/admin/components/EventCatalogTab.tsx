@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { EventProductRow } from '../hooks/useAdminCatalog';
+import { PRODUCT_CATEGORIES, categoryIcon } from '@/lib/categories';
 
 interface EventCatalogTabProps {
   eventProducts: EventProductRow[];
@@ -9,7 +10,7 @@ interface EventCatalogTabProps {
   onSave: (row: EventProductRow) => void;
   onDelete: (row: EventProductRow) => void;
   onAdd: (prodId: string, price: string, threshold: string, active: boolean) => void;
-  onCreateGlobal: (name: string) => void;
+  onCreateGlobal: (name: string, category?: string) => void;
 }
 
 export default function EventCatalogTab({
@@ -27,6 +28,7 @@ export default function EventCatalogTab({
   const [newProdThreshold, setNewProdThreshold] = useState('');
   const [newProdActive, setNewProdActive] = useState(true);
   const [newGlobalName, setNewGlobalName] = useState('');
+  const [newGlobalCategory, setNewGlobalCategory] = useState('');
 
   return (
     <section className="bg-white p-6 rounded-3xl shadow-sm border border-elche-gray/50">
@@ -48,6 +50,7 @@ export default function EventCatalogTab({
               <thead>
                 <tr className="bg-elche-gray/20 text-elche-text-light text-xs font-bold uppercase tracking-wider">
                   <th className="text-left p-3">Producto</th>
+                  <th className="text-center p-3">Categoría</th>
                   <th className="text-center p-3">Precio (€)</th>
                   <th className="text-center p-3">Umbral</th>
                   <th className="text-center p-3">Activo</th>
@@ -59,6 +62,18 @@ export default function EventCatalogTab({
                   <tr key={row.id} className="hover:bg-elche-gray/5 transition-colors group">
                     <td className="p-3 font-bold text-elche-text">
                       {row.name}
+                    </td>
+                    <td className="p-3 text-center">
+                      <select
+                        value={row.editCategory}
+                        onChange={e => setEventProducts(l => l.map(r => r.id === row.id ? { ...r, editCategory: e.target.value } : r))}
+                        className="p-1.5 rounded-xl border border-elche-gray/50 text-sm font-medium bg-white focus:ring-2 focus:ring-elche-primary focus:outline-none"
+                      >
+                        <option value="">📦 Otros</option>
+                        {PRODUCT_CATEGORIES.map(c => (
+                          <option key={c} value={c}>{categoryIcon(c)} {c}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="p-3 text-center">
                       <input
@@ -143,7 +158,7 @@ export default function EventCatalogTab({
             {/* Create Global */}
             <div className="bg-elche-gray/30 p-5 rounded-2xl border border-elche-gray/50 h-fit">
               <div className="font-bold text-elche-text mb-4">🌍 Crear nuevo producto global</div>
-              <div className="flex gap-3 mb-3">
+              <div className="flex flex-col sm:flex-row gap-3 mb-3">
                 <input
                   type="text"
                   placeholder="Nombre del producto"
@@ -151,8 +166,18 @@ export default function EventCatalogTab({
                   onChange={e => setNewGlobalName(e.target.value)}
                   className="flex-1 p-3 rounded-xl border border-elche-gray focus:ring-2 focus:ring-elche-primary focus:outline-none"
                 />
+                <select
+                  value={newGlobalCategory}
+                  onChange={e => setNewGlobalCategory(e.target.value)}
+                  className="p-3 rounded-xl border border-elche-gray bg-white font-medium focus:ring-2 focus:ring-elche-primary focus:outline-none"
+                >
+                  <option value="">📦 Sin categoría</option>
+                  {PRODUCT_CATEGORIES.map(c => (
+                    <option key={c} value={c}>{categoryIcon(c)} {c}</option>
+                  ))}
+                </select>
                 <button
-                  onClick={() => { onCreateGlobal(newGlobalName); setNewGlobalName(''); }}
+                  onClick={() => { onCreateGlobal(newGlobalName, newGlobalCategory); setNewGlobalName(''); setNewGlobalCategory(''); }}
                   className="px-5 py-3 rounded-xl bg-elche-primary text-white font-bold hover:bg-elche-secondary transition-colors shadow-sm"
                 >
                   Crear

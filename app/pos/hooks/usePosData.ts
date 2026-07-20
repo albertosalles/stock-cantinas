@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useLiveInventory } from '@/hooks/useLiveInventory';
 
 // Definición de tipos
-export type Product = { id: string; name: string; price_cents: number; sku: string };
+export type Product = { id: string; name: string; price_cents: number; sku: string; category: string | null };
 export type InventoryRow = { product_id: string; current_qty: number; low_stock_threshold: number };
 export type Totals = { num_sales: number; total_cents: number; total_items: number };
 
@@ -22,7 +22,7 @@ export function usePosData(eventId: string, cantinaId: string, sessionChecked: b
     queryFn: async () => {
       const { data, error } = await supabase
         .from('event_products')
-        .select('product_id, price_cents, products(name, sku)')
+        .select('product_id, price_cents, products(name, sku, category)')
         .eq('event_id', eventId)
         .eq('active', true)
         .order('sort_order', { ascending: true });
@@ -34,6 +34,7 @@ export function usePosData(eventId: string, cantinaId: string, sessionChecked: b
         name: row.products?.name ?? '—',
         price_cents: row.price_cents,
         sku: row.products?.sku ?? '',
+        category: row.products?.category ?? null,
       }));
 
       // Ordenar por SKU (alfanumérico)

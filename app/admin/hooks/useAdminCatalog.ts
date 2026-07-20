@@ -6,6 +6,7 @@ export interface EventProductRow {
   product_id: string;
   name: string;
   sku: string;
+  category: string | null;
   price_cents: number;
   low_stock_threshold: number;
   active: boolean;
@@ -13,6 +14,7 @@ export interface EventProductRow {
   editPrice: string;
   editThreshold: string;
   editActive: boolean;
+  editCategory: string;
 }
 
 export function useAdminCatalog(eventId: string) {
@@ -24,7 +26,7 @@ export function useAdminCatalog(eventId: string) {
     setLoading(true);
     const { data: eventProds } = await supabase
       .from('event_products')
-      .select('id, product_id, price_cents, low_stock_threshold, active, products(name, sku)')
+      .select('id, product_id, price_cents, low_stock_threshold, active, products(name, sku, category)')
       .eq('event_id', eventId);
 
     if (eventProds) {
@@ -33,12 +35,14 @@ export function useAdminCatalog(eventId: string) {
         product_id: row.product_id,
         name: row.products?.name ?? '—',
         sku: row.products?.sku ?? '',
+        category: row.products?.category ?? null,
         price_cents: row.price_cents,
         low_stock_threshold: row.low_stock_threshold ?? 0,
         active: row.active ?? true,
         editPrice: (row.price_cents / 100).toFixed(2),
         editThreshold: String(row.low_stock_threshold ?? 0),
         editActive: row.active ?? true,
+        editCategory: row.products?.category ?? '',
       }));
 
       // Ordenar por SKU (alfanumérico)
@@ -77,6 +81,17 @@ export function useAdminCatalog(eventId: string) {
       .eq('id', row.id);
 
     if (error) throw error;
+
+    // La categoría es intrínseca al producto global: se actualiza en `products`
+    // (afecta al producto en todos los eventos).
+    if ((row.editCategory || null) !== (row.category ?? null)) {
+      const { error: catError } = await supabase
+        .from('products')
+        .update({ category: row.editCategory || null })
+        .eq('id', row.product_id);
+      if (catError) throw catError;
+    }
+
     await fetchCatalog();
   }
 
@@ -111,9 +126,12 @@ export function useAdminCatalog(eventId: string) {
     await fetchCatalog();
   }
 
-  async function createGlobalProduct(name: string) {
+  async function createGlobalProduct(name: string, category?: string) {
     if (!name.trim()) throw new Error('Nombre requerido');
-    const { error } = await supabase.from('products').insert({ name: name.trim() });
+    const { error } = await supabase.from('products').insert({
+      name: name.trim(),
+      category: category || null,
+    });
     if (error) throw error;
     await fetchCatalog();
   }
