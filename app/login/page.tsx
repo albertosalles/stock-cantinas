@@ -6,6 +6,8 @@ import { useLogin } from './hooks/useLogin';
 import EventSelector from './components/EventSelector';
 import CantinaSelector from './components/CantinaSelector';
 import PinInput from './components/PinInput';
+import ScanStep from './components/ScanStep';
+import WaiterStep from './components/WaiterStep';
 
 export default function CantinaLoginPage() {
   const router = useRouter();
@@ -15,10 +17,14 @@ export default function CantinaLoginPage() {
     cantinas,
     selectedEvent,
     selectedCantina,
+    pendingAccess,
     pin,
     setPin,
     loading,
     error,
+    handleCantinaQr,
+    handleWaiterIdentify,
+    startManualFlow,
     selectEvent,
     selectCantina,
     goBack,
@@ -83,17 +89,27 @@ export default function CantinaLoginPage() {
             <div className="absolute top-0 left-0 h-1.5 bg-elche-gray w-full">
               <div
                 className="h-full bg-elche-primary transition-all duration-500 ease-out shadow-[0_0_10px_rgba(0,150,79,0.5)]"
-                style={{ width: step === 'event' ? '33%' : step === 'cantina' ? '66%' : '100%' }}
+                style={{ width: step === 'scan' ? '40%' : step === 'event' ? '25%' : step === 'cantina' ? '50%' : step === 'pin' ? '75%' : '100%' }}
               />
             </div>
 
             {/* Breadcrumb */}
             <div className="flex justify-center gap-2 mb-8 text-[11px] font-bold uppercase tracking-widest text-elche-text-light/60 select-none">
-              <span className={`transition-colors duration-300 ${step === 'event' ? 'text-elche-primary' : ''}`}>1. Evento</span>
-              <span className="text-elche-gray">•</span>
-              <span className={`transition-colors duration-300 ${step === 'cantina' ? 'text-elche-primary' : ''}`}>2. Cantina</span>
-              <span className="text-elche-gray">•</span>
-              <span className={`transition-colors duration-300 ${step === 'pin' ? 'text-elche-primary' : ''}`}>3. Acceso</span>
+              {step === 'scan' || step === 'waiter' ? (
+                <>
+                  <span className={`transition-colors duration-300 ${step === 'scan' ? 'text-elche-primary' : ''}`}>1. Cantina</span>
+                  <span className="text-elche-gray">•</span>
+                  <span className={`transition-colors duration-300 ${step === 'waiter' ? 'text-elche-primary' : ''}`}>2. Camarero</span>
+                </>
+              ) : (
+                <>
+                  <span className={`transition-colors duration-300 ${step === 'event' ? 'text-elche-primary' : ''}`}>1. Evento</span>
+                  <span className="text-elche-gray">•</span>
+                  <span className={`transition-colors duration-300 ${step === 'cantina' ? 'text-elche-primary' : ''}`}>2. Cantina</span>
+                  <span className="text-elche-gray">•</span>
+                  <span className={`transition-colors duration-300 ${step === 'pin' ? 'text-elche-primary' : ''}`}>3. Acceso</span>
+                </>
+              )}
             </div>
 
             {/* Error message */}
@@ -105,11 +121,36 @@ export default function CantinaLoginPage() {
             )}
 
             {/* Steps */}
-            {step === 'event' && (
-              <EventSelector
-                events={events}
-                onSelect={selectEvent}
+            {step === 'scan' && (
+              <ScanStep
+                loading={loading}
+                onScan={handleCantinaQr}
+                onManualFlow={startManualFlow}
               />
+            )}
+
+            {step === 'waiter' && pendingAccess && (
+              <WaiterStep
+                access={pendingAccess}
+                loading={loading}
+                onIdentify={handleWaiterIdentify}
+                onBack={goBack}
+              />
+            )}
+
+            {step === 'event' && (
+              <>
+                <EventSelector
+                  events={events}
+                  onSelect={selectEvent}
+                />
+                <button
+                  onClick={goBack}
+                  className="w-full mt-4 py-2 text-sm font-bold text-elche-text-light hover:text-elche-primary transition-colors"
+                >
+                  📷 Volver al escáner QR
+                </button>
+              </>
             )}
 
             {step === 'cantina' && (

@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import QRCode from 'react-qr-code';
 import { CantinaRow } from '../hooks/useAdminCantinas';
+import { CANTINA_QR_PREFIX } from '@/lib/waiters';
 
 interface EventCantinasTabProps {
   cantinas: CantinaRow[];
@@ -11,6 +13,7 @@ interface EventCantinasTabProps {
 export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate }: EventCantinasTabProps) {
   const [newName, setNewName] = useState('');
   const [newPin, setNewPin] = useState('');
+  const [qrCantina, setQrCantina] = useState<CantinaRow | null>(null);
 
   return (
     <section className="bg-white p-6 rounded-3xl shadow-sm border border-elche-gray/50">
@@ -30,6 +33,13 @@ export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate
             {cantinas.map(c => (
               <div key={c.id} className={`flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 rounded-2xl border transition-all gap-4 sm:gap-0 ${c.assigned ? 'bg-elche-success/5 border-elche-success/30' : 'bg-white border-elche-gray hover:border-elche-gray/80'}`}>
                 <span className={`font-bold ${c.assigned ? 'text-elche-text' : 'text-elche-text-light'} break-all`}>{c.name}</span>
+                <button
+                  onClick={() => setQrCantina(c)}
+                  className="px-3 py-1.5 rounded-lg bg-elche-text text-white font-bold text-xs hover:bg-elche-primary transition-colors shrink-0"
+                  title="QR de acceso para los camareros"
+                >
+                  📱 QR acceso
+                </button>
                 <label className="flex items-center gap-3 cursor-pointer select-none w-full sm:w-auto justify-between sm:justify-start">
                   <span className={`text-xs font-bold uppercase tracking-wide ${c.assigned ? 'text-elche-success' : 'text-elche-text-light'}`}>
                     {c.assigned ? 'Asignada' : 'No asignada'}
@@ -75,6 +85,44 @@ export default function EventCantinasTab({ cantinas, loading, onToggle, onCreate
                   Crear y Asignar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal QR de acceso de cantina */}
+      {qrCantina && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setQrCantina(null)}
+        >
+          <div
+            className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="font-bold text-xl text-elche-text mb-1">{qrCantina.name}</div>
+            <div className="text-xs text-elche-text-light font-medium mb-6">
+              QR de acceso — los camareros lo escanean para abrir su POS
+            </div>
+            <div className="bg-white p-4 rounded-2xl border-2 border-elche-gray/50 inline-block">
+              <QRCode value={`${CANTINA_QR_PREFIX}${qrCantina.qr_token}`} size={200} />
+            </div>
+            <div className="text-[11px] text-elche-text-light mt-4 font-medium">
+              Imprímelo y colócalo en un lugar visible de la barra.
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-3 rounded-xl bg-elche-primary text-white font-bold text-sm hover:bg-elche-secondary transition-colors"
+              >
+                🖨️ Imprimir
+              </button>
+              <button
+                onClick={() => setQrCantina(null)}
+                className="flex-1 py-3 rounded-xl bg-white border border-elche-gray text-elche-text font-bold text-sm hover:bg-elche-gray/30 transition-colors"
+              >
+                Cerrar
+              </button>
             </div>
           </div>
         </div>

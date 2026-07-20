@@ -3,6 +3,7 @@ import React from 'react';
 interface PosHeaderProps {
   eventName: string;
   cantinaName: string;
+  waiterName?: string;
   onLogout: () => void;
   // Nuevas props para el modo offline
   pendingUploads?: number;
@@ -12,6 +13,7 @@ interface PosHeaderProps {
 export default function PosHeader({
   eventName,
   cantinaName,
+  waiterName,
   onLogout,
   pendingUploads = 0,
   onManualSync
@@ -25,7 +27,10 @@ export default function PosHeader({
         <div className="flex items-center gap-3">
           <div>
             <div className="text-lg md:text-xl font-bold leading-tight">{cantinaName}</div>
-            <div className="text-xs text-white/80 font-medium">{eventName}</div>
+            <div className="text-xs text-white/80 font-medium">
+              {eventName}
+              {waiterName && <span className="ml-2 bg-white/15 px-2 py-0.5 rounded-full">👤 {waiterName}</span>}
+            </div>
           </div>
         </div>
 

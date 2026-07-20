@@ -35,6 +35,8 @@ export interface CreateSaleOptions {
    * false (por defecto) para ventas online: se rechazan si no hay stock.
    */
   allowOversell?: boolean;
+  /** Camarero que realiza la venta (atribución para métricas de rendimiento). */
+  waiterId?: string;
 }
 
 export async function createSale(
@@ -51,6 +53,7 @@ export async function createSale(
     p_lines: lines,
     p_client_request_id: options.clientRequestId ?? generateUUID(),
     p_allow_oversell: options.allowOversell ?? false,
+    p_waiter_id: options.waiterId || null,
   });
   if (error) throw error;
   return data;

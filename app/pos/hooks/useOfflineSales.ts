@@ -16,6 +16,7 @@ export type PendingSale = {
     eventId: string;
     cantinaId: string;
     userId: string;
+    waiterId?: string;
     lines: { productId: string; qty: number }[];
   };
   timestamp: number;
@@ -72,7 +73,7 @@ export function useOfflineSales() {
             sale.payload.lines,
             // La venta offline ya ocurrió físicamente: se registra aunque el stock
             // quede negativo. La clave de idempotencia evita duplicados en reintentos.
-            { clientRequestId: sale.id, allowOversell: true }
+            { clientRequestId: sale.id, allowOversell: true, waiterId: sale.payload.waiterId }
           );
           syncedCount++;
         } catch (error) {

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import { closeShift } from '@/lib/waiters';
 
 export type PosSession = {
   eventId: string;
@@ -8,6 +9,9 @@ export type PosSession = {
   userId: string;
   eventName: string;
   cantinaName: string;
+  waiterId: string;
+  waiterName: string;
+  shiftId: string;
   sessionChecked: boolean;
 };
 
@@ -23,6 +27,9 @@ export function usePosSession() {
     userId: '',
     eventName: 'Evento',
     cantinaName: 'Cantina',
+    waiterId: '',
+    waiterName: '',
+    shiftId: '',
     sessionChecked: false,
   });
 
@@ -47,6 +54,9 @@ export function usePosSession() {
           userId: FALLBACK_USER_ID,
           eventName: parsedSession.eventName,
           cantinaName: parsedSession.cantinaName,
+          waiterId: parsedSession.waiterId ?? '',
+          waiterName: parsedSession.waiterName ?? '',
+          shiftId: parsedSession.shiftId ?? '',
           sessionChecked: true, // Permitimos renderizar el TPV
         });
 
@@ -90,7 +100,14 @@ export function usePosSession() {
   }, [router]);
 
   const logout = () => {
-    if (confirm('¿Seguro que quieres cerrar sesión?')) {
+    if (confirm('¿Seguro que quieres cerrar sesión? Se cerrará tu turno.')) {
+      // Cierre de turno best-effort: si no hay red, el turno lo cierra
+      // automáticamente el trigger al cerrar el evento (turnos huérfanos).
+      if (session.shiftId) {
+        closeShift(session.shiftId).catch(err =>
+          console.warn('No se pudo cerrar el turno (se cerrará al cerrar el evento):', err)
+        );
+      }
       localStorage.removeItem('cantina_session');
       router.push('/login');
     }

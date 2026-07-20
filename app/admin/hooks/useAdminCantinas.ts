@@ -5,6 +5,7 @@ export interface CantinaRow {
   id: string;
   name: string;
   assigned: boolean;
+  qr_token: string;
 }
 
 export function useAdminCantinas(eventId: string) {
@@ -16,7 +17,7 @@ export function useAdminCantinas(eventId: string) {
     // Obtiene todas las cantinas
     const { data: all } = await supabase
       .from('cantinas')
-      .select('id, name')
+      .select('id, name, qr_token')
       .order('name');
 
     // Obtiene las cantinas ya asignadas
@@ -31,6 +32,7 @@ export function useAdminCantinas(eventId: string) {
       const mapped = all.map((c: any) => ({
         id: c.id,
         name: c.name,
+        qr_token: c.qr_token,
         assigned: assignedSet.has(c.id)
       }));
       setCantinas(mapped);

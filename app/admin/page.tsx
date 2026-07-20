@@ -3,12 +3,18 @@
 import AdminHeader from './components/AdminHeader';
 import { useAdminEvents } from './hooks/useAdminEvents';
 import { useAdminGuard } from './hooks/useAdminGuard';
+import { useAdminSeasons } from './hooks/useAdminSeasons';
+import { useAdminWaiters } from './hooks/useAdminWaiters';
 import CreateEventForm from './components/CreateEventForm';
 import EventsList from './components/EventsList';
+import SeasonsSection from './components/SeasonsSection';
+import WaitersSection from './components/WaitersSection';
 
 export default function AdminHome() {
   const checked = useAdminGuard();
   const { events, loading, createEvent, updateEventStatus } = useAdminEvents();
+  const seasonsApi = useAdminSeasons();
+  const waitersApi = useAdminWaiters();
 
   if (!checked) {
     return (
@@ -27,6 +33,14 @@ export default function AdminHome() {
 
       <main className="max-w-[1200px] mx-auto p-6 grid gap-8">
 
+        <SeasonsSection
+          seasons={seasonsApi.seasons}
+          loading={seasonsApi.loading}
+          onCreate={seasonsApi.createSeason}
+          onActivate={seasonsApi.activateSeason}
+          onClose={seasonsApi.closeSeason}
+        />
+
         <CreateEventForm onCreate={createEvent} />
 
         <section>
@@ -41,6 +55,13 @@ export default function AdminHome() {
             onUpdateStatus={updateEventStatus}
           />
         </section>
+
+        <WaitersSection
+          waiters={waitersApi.waiters}
+          loading={waitersApi.loading}
+          onCreate={waitersApi.createWaiter}
+          onToggleActive={waitersApi.toggleActive}
+        />
       </main>
     </div>
   );

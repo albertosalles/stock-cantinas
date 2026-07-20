@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
+import {
+  parseQr, resolveCantinaQr, identifyWaiter, openShift,
+  CantinaAccess,
+} from '@/lib/waiters';
 
 export type Event = {
   id: string;
@@ -19,11 +23,13 @@ export type Cantina = {
   has_credentials: boolean;
 };
 
-export type LoginStep = 'event' | 'cantina' | 'pin';
+// Flujo: 'scan' (QR cantina, camino principal) → 'waiter' (identificación personal)
+// Fallback manual: 'event' → 'cantina' → 'pin' → 'waiter'
+export type LoginStep = 'scan' | 'event' | 'cantina' | 'pin' | 'waiter';
 
 export function useLogin() {
   const router = useRouter();
-  const [step, setStep] = useState<LoginStep>('event');
+  const [step, setStep] = useState<LoginStep>('scan');
   const [events, setEvents] = useState<Event[]>([]);
   const [cantinas, setCantinas] = useState<Cantina[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -31,6 +37,9 @@ export function useLogin() {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Acceso a cantina resuelto (por QR o por flujo manual), pendiente de identificar camarero
+  const [pendingAccess, setPendingAccess] = useState<CantinaAccess | null>(null);
 
   useEffect(() => {
     loadActiveEvents();
@@ -53,7 +62,7 @@ export function useLogin() {
         .from('v_available_cantinas')
         .select('*')
         .eq('event_id', eventId);
-      
+
       if (error) throw error;
       setCantinas(data || []);
     } catch (e: any) {
@@ -62,6 +71,86 @@ export function useLogin() {
     }
   }
 
+  // ─── Paso 'scan': QR de cantina ───
+  async function handleCantinaQr(text: string) {
+    if (loading) return;
+    const { kind, token } = parseQr(text);
+    if (kind === 'waiter') {
+      setError('Este QR es de una acreditación de camarero. Escanea el QR de la cantina.');
+      return;
+    }
+    if (!token) {
+      setError('Código QR no reconocido');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const access = await resolveCantinaQr(token);
+      if (!access) {
+        setError('QR no válido o la cantina no tiene ningún evento en vivo');
+        return;
+      }
+      setPendingAccess(access);
+      setStep('waiter');
+    } catch (e: any) {
+      console.error('QR cantina error:', e);
+      setError(e.message || 'Error al validar el QR');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ─── Paso 'waiter': identificación personal (QR de acreditación o PIN personal) ───
+  async function handleWaiterIdentify(opts: { qrText?: string; pin?: string }) {
+    if (!pendingAccess || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      let identity = null;
+      if (opts.qrText !== undefined) {
+        const { kind, token } = parseQr(opts.qrText);
+        if (kind === 'cantina') {
+          setError('Este QR es de una cantina. Escanea el QR de tu acreditación.');
+          return;
+        }
+        if (!token) {
+          setError('Código QR no reconocido');
+          return;
+        }
+        identity = await identifyWaiter({ qrToken: token });
+      } else if (opts.pin) {
+        identity = await identifyWaiter({ pin: opts.pin });
+      }
+
+      if (!identity) {
+        setError('Camarero no encontrado o desactivado');
+        return;
+      }
+
+      // Abrir turno e iniciar sesión
+      const shiftId = await openShift(identity.waiterId, pendingAccess.eventId, pendingAccess.cantinaId);
+
+      localStorage.setItem('cantina_session', JSON.stringify({
+        eventId: pendingAccess.eventId,
+        eventName: pendingAccess.eventName,
+        cantinaId: pendingAccess.cantinaId,
+        cantinaName: pendingAccess.cantinaName,
+        waiterId: identity.waiterId,
+        waiterName: identity.waiterName,
+        shiftId,
+        loginTime: new Date().toISOString(),
+      }));
+      router.push('/pos');
+    } catch (e: any) {
+      console.error('Waiter identify error:', e);
+      setError(e.message || 'Error al identificar al camarero');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // ─── Fallback manual (evento → cantina → PIN de cantina) ───
   function selectEvent(event: Event) {
     setSelectedEvent(event);
     setError('');
@@ -75,15 +164,25 @@ export function useLogin() {
     setStep('pin');
   }
 
+  function startManualFlow() {
+    setError('');
+    setStep('event');
+  }
+
   function goBack() {
     setError('');
-    if (step === 'pin') {
+    if (step === 'waiter') {
+      setPendingAccess(null);
+      setStep('scan');
+    } else if (step === 'pin') {
       setStep('cantina');
       setPin('');
     } else if (step === 'cantina') {
       setStep('event');
       setSelectedEvent(null);
       setCantinas([]);
+    } else if (step === 'event') {
+      setStep('scan');
     }
   }
 
@@ -103,16 +202,16 @@ export function useLogin() {
       if (error) throw error;
 
       const result = data[0];
-      
+
       if (result.success) {
-        localStorage.setItem('cantina_session', JSON.stringify({
+        // El acceso a la cantina está validado: falta identificar al camarero
+        setPendingAccess({
           eventId: selectedEvent.id,
           eventName: result.event_name,
           cantinaId: selectedCantina.cantina_id,
           cantinaName: result.cantina_name,
-          loginTime: new Date().toISOString()
-        }));
-        router.push('/pos');
+        });
+        setStep('waiter');
       } else {
         setError(result.message || 'Acceso denegado');
       }
@@ -130,14 +229,18 @@ export function useLogin() {
     cantinas,
     selectedEvent,
     selectedCantina,
+    pendingAccess,
     pin,
     setPin,
     loading,
     error,
+    setError,
+    handleCantinaQr,
+    handleWaiterIdentify,
+    startManualFlow,
     selectEvent,
     selectCantina,
     goBack,
     login
   };
 }
-

@@ -66,6 +66,7 @@ export default function PosPage() {
       eventId: session.eventId,
       cantinaId: session.cantinaId,
       userId: session.userId,
+      waiterId: session.waiterId,
       lines: cart
     };
     // Clave de idempotencia única: se reutiliza aunque la venta acabe en la cola
@@ -80,7 +81,7 @@ export default function PosPage() {
             salePayload.cantinaId,
             salePayload.userId,
             salePayload.lines,
-            { clientRequestId }
+            { clientRequestId, waiterId: session.waiterId }
           );
 
           clearCart();
@@ -148,6 +149,7 @@ export default function PosPage() {
           eventId: session.eventId,
           cantinaId: session.cantinaId,
           userId: session.userId,
+          waiterId: session.waiterId,
           lines: cart,
         };
         const clientRequestId = generateUUID();
@@ -163,7 +165,7 @@ export default function PosPage() {
             salePayload.cantinaId,
             salePayload.userId,
             salePayload.lines,
-            { clientRequestId, allowOversell: true }
+            { clientRequestId, allowOversell: true, waiterId: session.waiterId }
           );
           refreshTotals();
           refreshInventory();
@@ -213,6 +215,7 @@ export default function PosPage() {
       <PosHeader
         eventName={session.eventName}
         cantinaName={session.cantinaName}
+        waiterName={session.waiterName}
         onLogout={session.logout}
         pendingUploads={pendingCount}
         onManualSync={syncQueue}
