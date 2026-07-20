@@ -93,7 +93,7 @@ export default function EventPanelTab({
                   <td className="p-4 text-right font-mono text-elche-text-light font-medium">{r.initial_qty !== null ? r.initial_qty : '—'}</td>
                   <td className="p-4 text-right font-mono font-bold text-lg text-elche-text">{r.current_qty}</td>
                   <td className="p-4 text-right font-mono font-bold text-elche-primary">
-                    {r.initial_qty !== null ? Math.max(0, r.initial_qty - r.current_qty) : '—'}
+                    {r.sold_qty}
                   </td>
                   <td className="p-4 text-right font-mono text-elche-text-light font-medium">{r.low_stock_threshold}</td>
                   <td className="p-4 text-center">

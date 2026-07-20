@@ -8,10 +8,10 @@ interface MobileCartDrawerProps {
   onAddOne: (id: string) => void;
   onDecOne: (id: string) => void;
   onClear: () => void;
-  onSell: () => void;
+  onPay: () => void;
 }
 
-export default function MobileCartDrawer({ cart, products, totalEur, onAddOne, onDecOne, onClear, onSell }: MobileCartDrawerProps) {
+export default function MobileCartDrawer({ cart, products, totalEur, onAddOne, onDecOne, onClear, onPay }: MobileCartDrawerProps) {
   const [expanded, setExpanded] = useState(false);
 
   if (cart.length === 0) return null;
@@ -71,7 +71,7 @@ export default function MobileCartDrawer({ cart, products, totalEur, onAddOne, o
               🗑️
             </button>
             <button
-              onClick={onSell}
+              onClick={onPay}
               className="flex-1 bg-gradient-to-r from-elche-primary to-elche-secondary text-white font-bold h-[50px] rounded-2xl shadow-lg shadow-elche-primary/30 active:scale-[0.98] transition-transform flex justify-between items-center px-5 text-lg"
             >
               <div className="flex flex-col items-start leading-none gap-0.5">

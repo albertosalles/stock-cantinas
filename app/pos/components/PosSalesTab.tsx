@@ -12,10 +12,10 @@ interface PosSalesTabProps {
   onAddOne: (id: string) => void;
   onDecOne: (id: string) => void;
   onClear: () => void;
-  onSell: () => void;
+  onOpenPayment: () => void;
 }
 
-export default function PosSalesTab({ products, invMap, cart, totalEur, onAddOne, onDecOne, onClear, onSell }: PosSalesTabProps) {
+export default function PosSalesTab({ products, invMap, cart, totalEur, onAddOne, onDecOne, onClear, onOpenPayment }: PosSalesTabProps) {
   return (
     <section className="grid grid-cols-1 md:grid-cols-[1fr_380px] gap-5 pb-32 md:pb-0">
       {/* Productos Grid */}
@@ -39,7 +39,7 @@ export default function PosSalesTab({ products, invMap, cart, totalEur, onAddOne
         onAddOne={onAddOne}
         onDecOne={onDecOne}
         onClear={onClear}
-        onSell={onSell}
+        onPay={onOpenPayment}
       />
 
       {/* Carrito Mobile */}
@@ -50,9 +50,10 @@ export default function PosSalesTab({ products, invMap, cart, totalEur, onAddOne
         onAddOne={onAddOne}
         onDecOne={onDecOne}
         onClear={onClear}
-        onSell={onSell}
+        onPay={onOpenPayment}
       />
     </section>
   );
 }
+
 

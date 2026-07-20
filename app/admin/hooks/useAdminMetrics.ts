@@ -16,6 +16,7 @@ export interface PanelRow {
   sku: string;
   current_qty: number;
   initial_qty: number | null;
+  sold_qty: number;
   low_stock_threshold: number
 }
 
@@ -73,8 +74,8 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
   }
 
   async function fetchPanelData(cantinaId: string) {
-    // Fetch stock, products and initial inventory in parallel
-    const [invRes, prodsRes, initRes] = await Promise.all([
+    // Fetch stock, products, initial inventory and real sold qty in parallel
+    const [invRes, prodsRes, initRes, soldRes] = await Promise.all([
       supabase
         .from('v_cantina_inventory')
         .select('product_id, current_qty, low_stock_threshold')
@@ -87,11 +88,16 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
       supabase
         .from('inventory_snapshots')
         .select('product_id, qty')
-        .match({ event_id: eventId, cantina_id: cantinaId, kind: 'INITIAL' })
+        .match({ event_id: eventId, cantina_id: cantinaId, kind: 'INITIAL' }),
+      supabase
+        .from('v_sold_by_cantina_product')
+        .select('product_id, sold_qty')
+        .match({ event_id: eventId, cantina_id: cantinaId })
     ]);
 
     const invMap = new Map(invRes.data?.map((r: any) => [r.product_id, r]) ?? []);
     const initMap = new Map(initRes.data?.map((r: any) => [r.product_id, r.qty as number]) ?? []);
+    const soldMap = new Map(soldRes.data?.map((r: any) => [r.product_id, r.sold_qty as number]) ?? []);
 
     const rows = (prodsRes.data ?? []).map((ep: any) => {
       const r = invMap.get(ep.product_id);
@@ -102,6 +108,8 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
         sku: ep.products?.sku ?? '',
         current_qty: r?.current_qty ?? 0,
         initial_qty: initialQty ?? null,
+        // Vendidos reales (movimientos SALE), correcto aunque haya traspasos/mermas.
+        sold_qty: soldMap.get(ep.product_id) ?? 0,
         low_stock_threshold: (r?.low_stock_threshold ?? ep.low_stock_threshold ?? 0)
       };
     });

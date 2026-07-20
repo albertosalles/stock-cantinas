@@ -29,15 +29,21 @@ export async function exportInventoryToExcel(eventId: string, eventName: string)
         console.time("⏱️ Exportación"); // Cronómetro para medir rendimiento
 
         // 1. Cargar datos (Supabase + Plantilla) en paralelo para ganar velocidad
-        const [templateBuffer, inventoryResponse] = await Promise.all([
+        const [templateBuffer, inventoryResponse, finalResponse] = await Promise.all([
             fetch('/plantilla_inventario.xlsx').then(res => {
                 if (!res.ok) throw new Error('Error cargando plantilla');
                 return res.arrayBuffer();
             }),
             supabase
                 .from('v_cantina_inventory')
-                .select(`current_qty, products (name), cantinas (name, location)`)
+                .select(`product_id, cantina_id, current_qty, products (name), cantinas (name, location)`)
+                .eq('event_id', eventId),
+            // Inventario final manual (si el cajero lo introdujo por descuadre)
+            supabase
+                .from('inventory_snapshots')
+                .select('cantina_id, product_id, qty')
                 .eq('event_id', eventId)
+                .eq('kind', 'FINAL')
         ]);
 
         const { data: inventoryData, error } = inventoryResponse;
@@ -46,6 +52,13 @@ export async function exportInventoryToExcel(eventId: string, eventName: string)
             alert("No hay datos de inventario.");
             return;
         }
+
+        // Mapa de inventario final manual: (cantina, producto) -> cantidad.
+        // Si existe, tiene prioridad sobre el stock calculado (cierre con conteo físico).
+        const finalMap = new Map<string, number>();
+        (finalResponse.data ?? []).forEach((r: any) => {
+            finalMap.set(`${r.cantina_id}_${r.product_id}`, r.qty);
+        });
 
         // 2. Procesar Excel
         const workbook = new ExcelJS.Workbook();
@@ -58,7 +71,9 @@ export async function exportInventoryToExcel(eventId: string, eventName: string)
             const pKey = normalizeName(item.products?.name);
             const lKey = normalizeName(item.cantinas?.location);
             if (pKey && lKey) {
-                dbMap.set(`${pKey}_${lKey}`, item.current_qty);
+                // Preferimos el inventario final manual; si no existe, el stock calculado.
+                const finalQty = finalMap.get(`${item.cantina_id}_${item.product_id}`);
+                dbMap.set(`${pKey}_${lKey}`, finalQty ?? item.current_qty);
             }
         });
 

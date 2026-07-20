@@ -1,11 +1,16 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, set } from 'idb-keyval';
-import { createSale } from '@/lib/sales';
+import { createSale, generateUUID } from '@/lib/sales';
 
 const OFFLINE_QUEUE_KEY = 'offline_sales_queue';
 
+// Guard a nivel de módulo: evita que dos disparos de sincronización
+// (montaje + evento `online`, StrictMode, etc.) procesen la cola a la vez.
+let isSyncing = false;
+
 export type PendingSale = {
+  /** También es la clave de idempotencia (client_request_id) enviada al servidor. */
   id: string;
   payload: {
     eventId: string;
@@ -15,25 +20,6 @@ export type PendingSale = {
   };
   timestamp: number;
 };
-
-// --- FUNCIÓN SEGURA (Copiada de tu lib/sales.ts) ---
-function generateSafeUUID(): string {
-  // 1. Intenta usar la API moderna
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    try {
-      return crypto.randomUUID();
-    } catch (e) {
-      // Si falla, ignoramos y pasamos al manual
-    }
-  }
-
-  // 2. Fallback manual (funciona en todos los navegadores)
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-}
 
 export function useOfflineSales() {
   const queryClient = useQueryClient();
@@ -45,15 +31,20 @@ export function useOfflineSales() {
     staleTime: 0,
   });
 
-  // 2. Añadir a cola (Usando la función segura)
-  const queueSale = async (payload: PendingSale['payload']) => {
+  // 2. Añadir a cola.
+  // `clientRequestId` permite reutilizar la misma clave de idempotencia que ya
+  // se intentó online (si la venta pasó del camino online al offline), de modo
+  // que una venta confirmada en servidor pero sin respuesta no se duplique.
+  const queueSale = async (payload: PendingSale['payload'], clientRequestId?: string) => {
     const newSale: PendingSale = {
-      id: generateSafeUUID(), // <--- AQUI ESTABA EL ERROR, AHORA CORREGIDO
+      id: clientRequestId ?? generateUUID(),
       payload,
       timestamp: Date.now(),
     };
 
     const currentQueue = (await get<PendingSale[]>(OFFLINE_QUEUE_KEY)) || [];
+    // Evita encolar dos veces la misma venta (misma clave de idempotencia).
+    if (currentQueue.some(s => s.id === newSale.id)) return;
     const updatedQueue = [...currentQueue, newSale];
 
     await set(OFFLINE_QUEUE_KEY, updatedQueue);
@@ -62,34 +53,43 @@ export function useOfflineSales() {
 
   // 3. Sincronizar
   const syncQueue = async () => {
-    const currentQueue = (await get<PendingSale[]>(OFFLINE_QUEUE_KEY)) || [];
-    if (currentQueue.length === 0) return;
+    if (isSyncing) return;
+    isSyncing = true;
+    try {
+      const currentQueue = (await get<PendingSale[]>(OFFLINE_QUEUE_KEY)) || [];
+      if (currentQueue.length === 0) return;
 
-    console.log(`🔄 Intentando sincronizar ${currentQueue.length} ventas...`);
-    const failedQueue: PendingSale[] = [];
-    let syncedCount = 0;
+      console.log(`🔄 Intentando sincronizar ${currentQueue.length} ventas...`);
+      const failedQueue: PendingSale[] = [];
+      let syncedCount = 0;
 
-    for (const sale of currentQueue) {
-      try {
-        await createSale(
-          sale.payload.eventId,
-          sale.payload.cantinaId,
-          sale.payload.userId,
-          sale.payload.lines
-        );
-        syncedCount++;
-      } catch (error) {
-        console.error("❌ Falló venta:", sale.id, error);
-        failedQueue.push(sale);
+      for (const sale of currentQueue) {
+        try {
+          await createSale(
+            sale.payload.eventId,
+            sale.payload.cantinaId,
+            sale.payload.userId,
+            sale.payload.lines,
+            // La venta offline ya ocurrió físicamente: se registra aunque el stock
+            // quede negativo. La clave de idempotencia evita duplicados en reintentos.
+            { clientRequestId: sale.id, allowOversell: true }
+          );
+          syncedCount++;
+        } catch (error) {
+          console.error("❌ Falló venta:", sale.id, error);
+          failedQueue.push(sale);
+        }
       }
-    }
 
-    await set(OFFLINE_QUEUE_KEY, failedQueue);
-    refetch();
+      await set(OFFLINE_QUEUE_KEY, failedQueue);
+      refetch();
 
-    if (syncedCount > 0) {
-      queryClient.invalidateQueries({ queryKey: ['totals'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      if (syncedCount > 0) {
+        queryClient.invalidateQueries({ queryKey: ['totals'] });
+        queryClient.invalidateQueries({ queryKey: ['inventory'] });
+      }
+    } finally {
+      isSyncing = false;
     }
   };
 
