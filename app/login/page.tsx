@@ -8,6 +8,7 @@ import CantinaSelector from './components/CantinaSelector';
 import PinInput from './components/PinInput';
 import ScanStep from './components/ScanStep';
 import WaiterStep from './components/WaiterStep';
+import { DEV_EASY_LOGIN } from '@/lib/devConfig';
 
 export default function CantinaLoginPage() {
   const router = useRouter();
@@ -18,12 +19,14 @@ export default function CantinaLoginPage() {
     selectedEvent,
     selectedCantina,
     pendingAccess,
+    activeWaiters,
     pin,
     setPin,
     loading,
     error,
     handleCantinaQr,
     handleWaiterIdentify,
+    loginAsWaiter,
     startManualFlow,
     selectEvent,
     selectCantina,
@@ -135,6 +138,8 @@ export default function CantinaLoginPage() {
                 loading={loading}
                 onIdentify={handleWaiterIdentify}
                 onBack={goBack}
+                waiters={DEV_EASY_LOGIN ? activeWaiters : undefined}
+                onSelectWaiter={loginAsWaiter}
               />
             )}
 
@@ -144,12 +149,14 @@ export default function CantinaLoginPage() {
                   events={events}
                   onSelect={selectEvent}
                 />
-                <button
-                  onClick={goBack}
-                  className="w-full mt-4 py-2 text-sm font-bold text-elche-text-light hover:text-elche-primary transition-colors"
-                >
-                  📷 Volver al escáner QR
-                </button>
+                {!DEV_EASY_LOGIN && (
+                  <button
+                    onClick={goBack}
+                    className="w-full mt-4 py-2 text-sm font-bold text-elche-text-light hover:text-elche-primary transition-colors"
+                  >
+                    📷 Volver al escáner QR
+                  </button>
+                )}
               </>
             )}
 

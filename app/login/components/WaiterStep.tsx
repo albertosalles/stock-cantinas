@@ -3,18 +3,23 @@
 import React, { useState } from 'react';
 import QrScanner from './QrScanner';
 import { CantinaAccess } from '@/lib/waiters';
+import type { ActiveWaiter } from '../hooks/useLogin';
 
 interface WaiterStepProps {
   access: CantinaAccess;
   loading: boolean;
   onIdentify: (opts: { qrText?: string; pin?: string }) => void;
   onBack: () => void;
+  /** [DEV] Si se pasa, se muestra un listado de camareros en vez del QR/PIN. */
+  waiters?: ActiveWaiter[];
+  onSelectWaiter?: (id: string, name: string) => void;
 }
 
 /** Identificación del camarero: QR de su acreditación, o PIN personal como alternativa. */
-export default function WaiterStep({ access, loading, onIdentify, onBack }: WaiterStepProps) {
+export default function WaiterStep({ access, loading, onIdentify, onBack, waiters, onSelectWaiter }: WaiterStepProps) {
   const [mode, setMode] = useState<'qr' | 'pin'>('qr');
   const [personalPin, setPersonalPin] = useState('');
+  const devList = !!waiters; // modo desarrollo: elegir de la lista
 
   return (
     <div className="grid gap-5">
@@ -27,9 +32,43 @@ export default function WaiterStep({ access, loading, onIdentify, onBack }: Wait
       <div className="text-center">
         <div className="font-bold text-elche-text text-lg mb-1">¿Quién eres?</div>
         <div className="text-sm text-elche-text-light">
-          {mode === 'qr' ? 'Escanea el QR de tu acreditación' : 'Introduce tu PIN personal'}
+          {devList ? 'Selecciona tu nombre' : mode === 'qr' ? 'Escanea el QR de tu acreditación' : 'Introduce tu PIN personal'}
         </div>
       </div>
+
+      {/* [DEV] Listado de camareros activos */}
+      {devList && (
+        loading ? (
+          <div className="py-12 text-center flex flex-col items-center gap-3">
+            <div className="w-8 h-8 border-4 border-elche-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-elche-text-light font-medium">Abriendo turno...</span>
+          </div>
+        ) : (
+          <div className="grid gap-2">
+            {waiters!.length === 0 ? (
+              <div className="text-center text-elche-text-light italic py-6">
+                No hay camareros activos. Da de alta uno desde el panel de administración.
+              </div>
+            ) : waiters!.map(w => (
+              <button
+                key={w.id}
+                onClick={() => onSelectWaiter?.(w.id, w.name)}
+                className="w-full p-4 rounded-2xl border border-elche-gray bg-white font-bold text-elche-text text-left hover:border-elche-primary hover:bg-elche-primary/5 active:scale-[0.99] transition-all flex items-center gap-3"
+              >
+                <span className="w-9 h-9 rounded-full bg-elche-primary/10 text-elche-primary flex items-center justify-center">👤</span>
+                {w.name}
+              </button>
+            ))}
+            <button onClick={onBack} className="w-full mt-2 py-2 text-sm font-bold text-elche-text-light hover:text-elche-primary transition-colors">
+              ← Cambiar de cantina
+            </button>
+          </div>
+        )
+      )}
+
+      {devList ? null : (
+      <>
+        {/* --- Flujo de producción (QR / PIN) --- */}
 
       {loading ? (
         <div className="py-16 text-center flex flex-col items-center gap-3">
@@ -80,6 +119,8 @@ export default function WaiterStep({ access, loading, onIdentify, onBack }: Wait
       >
         ← Cambiar de cantina
       </button>
+      </>
+      )}
     </div>
   );
 }

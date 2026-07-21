@@ -5,6 +5,9 @@ import {
   parseQr, resolveCantinaQr, identifyWaiter, openShift,
   CantinaAccess,
 } from '@/lib/waiters';
+import { DEV_EASY_LOGIN } from '@/lib/devConfig';
+
+export type ActiveWaiter = { id: string; name: string };
 
 export type Event = {
   id: string;
@@ -29,7 +32,8 @@ export type LoginStep = 'scan' | 'event' | 'cantina' | 'pin' | 'waiter';
 
 export function useLogin() {
   const router = useRouter();
-  const [step, setStep] = useState<LoginStep>('scan');
+  // En modo dev arrancamos directamente en el flujo manual (sin escáner QR)
+  const [step, setStep] = useState<LoginStep>(DEV_EASY_LOGIN ? 'event' : 'scan');
   const [events, setEvents] = useState<Event[]>([]);
   const [cantinas, setCantinas] = useState<Cantina[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -41,9 +45,26 @@ export function useLogin() {
   // Acceso a cantina resuelto (por QR o por flujo manual), pendiente de identificar camarero
   const [pendingAccess, setPendingAccess] = useState<CantinaAccess | null>(null);
 
+  // [DEV] Listado de camareros activos para el login simplificado
+  const [activeWaiters, setActiveWaiters] = useState<ActiveWaiter[]>([]);
+
   useEffect(() => {
     loadActiveEvents();
+    if (DEV_EASY_LOGIN) loadActiveWaiters();
   }, []);
+
+  async function loadActiveWaiters() {
+    const { data, error } = await supabase
+      .from('waiters')
+      .select('id, name, surname')
+      .eq('active', true)
+      .order('name');
+    if (error) { console.error('Error loading waiters:', error); return; }
+    setActiveWaiters((data ?? []).map((w: any) => ({
+      id: w.id,
+      name: `${w.name} ${w.surname ?? ''}`.trim(),
+    })));
+  }
 
   async function loadActiveEvents() {
     try {
@@ -101,6 +122,23 @@ export function useLogin() {
     }
   }
 
+  // Abre turno, persiste la sesión y entra al POS
+  async function startSession(waiterId: string, waiterName: string) {
+    if (!pendingAccess) return;
+    const shiftId = await openShift(waiterId, pendingAccess.eventId, pendingAccess.cantinaId);
+    localStorage.setItem('cantina_session', JSON.stringify({
+      eventId: pendingAccess.eventId,
+      eventName: pendingAccess.eventName,
+      cantinaId: pendingAccess.cantinaId,
+      cantinaName: pendingAccess.cantinaName,
+      waiterId,
+      waiterName,
+      shiftId,
+      loginTime: new Date().toISOString(),
+    }));
+    router.push('/pos');
+  }
+
   // ─── Paso 'waiter': identificación personal (QR de acreditación o PIN personal) ───
   async function handleWaiterIdentify(opts: { qrText?: string; pin?: string }) {
     if (!pendingAccess || loading) return;
@@ -128,23 +166,25 @@ export function useLogin() {
         return;
       }
 
-      // Abrir turno e iniciar sesión
-      const shiftId = await openShift(identity.waiterId, pendingAccess.eventId, pendingAccess.cantinaId);
-
-      localStorage.setItem('cantina_session', JSON.stringify({
-        eventId: pendingAccess.eventId,
-        eventName: pendingAccess.eventName,
-        cantinaId: pendingAccess.cantinaId,
-        cantinaName: pendingAccess.cantinaName,
-        waiterId: identity.waiterId,
-        waiterName: identity.waiterName,
-        shiftId,
-        loginTime: new Date().toISOString(),
-      }));
-      router.push('/pos');
+      await startSession(identity.waiterId, identity.waiterName);
     } catch (e: any) {
       console.error('Waiter identify error:', e);
       setError(e.message || 'Error al identificar al camarero');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // [DEV] Login directo eligiendo camarero de la lista (sin QR ni PIN)
+  async function loginAsWaiter(waiterId: string, waiterName: string) {
+    if (!pendingAccess || loading) return;
+    setLoading(true);
+    setError('');
+    try {
+      await startSession(waiterId, waiterName);
+    } catch (e: any) {
+      console.error('Dev login error:', e);
+      setError(e.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
@@ -161,7 +201,18 @@ export function useLogin() {
   function selectCantina(cantina: Cantina) {
     setSelectedCantina(cantina);
     setError('');
-    setStep('pin');
+    if (DEV_EASY_LOGIN) {
+      // Saltamos el PIN de cantina: acceso directo a la identificación de camarero
+      setPendingAccess({
+        eventId: cantina.event_id,
+        eventName: cantina.event_name,
+        cantinaId: cantina.cantina_id,
+        cantinaName: cantina.cantina_name,
+      });
+      setStep('waiter');
+    } else {
+      setStep('pin');
+    }
   }
 
   function startManualFlow() {
@@ -173,7 +224,8 @@ export function useLogin() {
     setError('');
     if (step === 'waiter') {
       setPendingAccess(null);
-      setStep('scan');
+      // En dev volvemos a la selección de cantina; en producción, al escáner
+      setStep(DEV_EASY_LOGIN ? 'cantina' : 'scan');
     } else if (step === 'pin') {
       setStep('cantina');
       setPin('');
@@ -230,6 +282,7 @@ export function useLogin() {
     selectedEvent,
     selectedCantina,
     pendingAccess,
+    activeWaiters,
     pin,
     setPin,
     loading,
@@ -237,6 +290,7 @@ export function useLogin() {
     setError,
     handleCantinaQr,
     handleWaiterIdentify,
+    loginAsWaiter,
     startManualFlow,
     selectEvent,
     selectCantina,
