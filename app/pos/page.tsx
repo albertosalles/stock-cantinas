@@ -24,7 +24,7 @@ export default function PosPage() {
   );
 
   // 2. Hook del Carrito
-  const { cart, addOne, decOne, clearCart, totalEur } = useCart(products);
+  const { cart, addOne, decOne, clearCart, setCartLines, totalEur } = useCart(products);
 
   // 3. Hook Offline (La magia nueva)
   const { queueSale, pendingCount, syncQueue } = useOfflineSales();
@@ -282,8 +282,12 @@ export default function PosPage() {
               <PosHistoryTab
                 eventId={session.eventId}
                 cantinaId={session.cantinaId}
+                waiterId={session.waiterId}
                 products={products}
                 sessionChecked={session.sessionChecked}
+                active={tab === 'ventas'}
+                onModify={(lines) => { setCartLines(lines); setTab('venta'); }}
+                onAfterVoid={() => { refreshInventory(); refreshTotals(); }}
               />
             </div>
           </>

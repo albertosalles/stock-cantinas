@@ -35,6 +35,9 @@ export function useCart(products: Product[]) {
 
   const clearCart = () => setCart([]);
 
+  // Reemplaza el carrito completo (usado al "modificar" una venta: anular + rehacer)
+  const setCartLines = (lines: CartItem[]) => setCart(lines);
+
   const totalEur = useMemo(() =>
     cart.reduce((sum, line) => {
       const p = products.find(x => x.id === line.productId);
@@ -51,6 +54,7 @@ export function useCart(products: Product[]) {
     addOne,
     decOne,
     clearCart,
+    setCartLines,
     totalEur,
     totalItems
   };

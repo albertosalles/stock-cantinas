@@ -7,6 +7,8 @@ export type Sale = {
   created_at: string;
   total_cents: number;
   total_items: number;
+  status: string;
+  void_reason: string | null;
   sale_lines: SaleLine[];
 };
 
@@ -36,7 +38,7 @@ export function usePosHistory(eventId: string, cantinaId: string, sessionChecked
       const { data: salesData } = await supabase
         .from('sales')
         .select(`
-          id, created_at,
+          id, created_at, status, void_reason,
           sale_line_items ( product_id, qty, unit_price_cents )
         `)
         .eq('event_id', eventId)
@@ -57,6 +59,8 @@ export function usePosHistory(eventId: string, cantinaId: string, sessionChecked
           created_at: sale.created_at,
           total_cents,
           total_items,
+          status: sale.status ?? 'OK',
+          void_reason: sale.void_reason ?? null,
           sale_lines: lines,
         };
       });

@@ -60,6 +60,19 @@ export async function createSale(
 }
 
 /**
+ * Anula una venta (soft): la marca CANCELED y restaura el stock mediante
+ * movimientos compensatorios. El motivo es obligatorio.
+ */
+export async function voidSale(saleId: string, waiterId: string | null, reason: string) {
+  const { error } = await supabase.rpc('void_sale', {
+    p_sale_id: saleId,
+    p_waiter_id: waiterId || null,
+    p_reason: reason,
+  });
+  if (error) throw error;
+}
+
+/**
  * Distingue un fallo de red (hay que encolar la venta y reintentar más tarde)
  * de un error de negocio devuelto por el servidor (stock insuficiente, producto
  * inactivo…), que NO debe encolarse porque el servidor la rechazó a propósito.
