@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 
 // Componentes UI
 import AdminHeader from '../components/AdminHeader';
+import EventDashboardTab from '../components/EventDashboardTab';
 import EventGeneralTab from '../components/EventGeneralTab';
 import EventCantinasTab from '../components/EventCantinasTab';
 import EventCatalogTab from '../components/EventCatalogTab';
@@ -20,7 +21,7 @@ import { useAdminInventory } from '../hooks/useAdminInventory';
 import { useAdminMetrics } from '../hooks/useAdminMetrics';
 import { useAdminGuard } from '../hooks/useAdminGuard';
 
-type TabKey = 'general' | 'cantinas' | 'catalogo' | 'inventario' | 'panel' | 'global';
+type TabKey = 'dashboard' | 'general' | 'cantinas' | 'catalogo' | 'inventario' | 'panel' | 'global';
 
 export default function EventAdminPage() {
   const checked = useAdminGuard();
@@ -28,7 +29,7 @@ export default function EventAdminPage() {
   const eventId = (params as { eventId: string }).eventId;
 
   // Estado de Navegación
-  const [tab, setTab] = useState<TabKey>('general');
+  const [tab, setTab] = useState<TabKey>('dashboard');
 
   // --- Hooks de Lógica ---
 
@@ -80,7 +81,7 @@ export default function EventAdminPage() {
         eventId={eventId}
       >
         <nav className="flex gap-1">
-          {(['general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
+          {(['dashboard', 'general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
             <button
               key={key}
               onClick={() => handleTabChange(key)}
@@ -89,6 +90,7 @@ export default function EventAdminPage() {
                 : 'bg-transparent text-white/80 font-medium hover:bg-white/10 hover:text-white'
                 }`}
             >
+              {key === 'dashboard' && '📊 Dashboard'}
               {key === 'general' && '⚙️ General'}
               {key === 'cantinas' && '🏪 Cantinas'}
               {key === 'catalogo' && '🛍️ Catálogo'}
@@ -103,7 +105,7 @@ export default function EventAdminPage() {
       {/* Navegación Móvil (Scroll horizontal sticky) */}
       <div className="md:hidden sticky top-0 z-40 bg-elche-bg/95 backdrop-blur-sm border-b border-elche-gray/50 overflow-x-auto">
         <div className="flex p-2 gap-2 min-w-max">
-          {(['general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
+          {(['dashboard', 'general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
             <button
               key={key}
               onClick={() => handleTabChange(key)}
@@ -112,6 +114,7 @@ export default function EventAdminPage() {
                 : 'bg-white text-elche-muted border-gray-200 font-medium'
                 }`}
             >
+              {key === 'dashboard' && '📊 Dashboard'}
               {key === 'general' && '⚙️ General'}
               {key === 'cantinas' && '🏪 Cantinas'}
               {key === 'catalogo' && '🛍️ Catálogo'}
@@ -126,6 +129,10 @@ export default function EventAdminPage() {
       <main className="max-w-[1600px] mx-auto p-4 md:p-8 animate-fade-in">
 
         {/* Renderizado Condicional de Tabs */}
+
+        {tab === 'dashboard' && (
+          <EventDashboardTab eventId={eventId} eventName={eventLogic.eventName} />
+        )}
 
         {tab === 'general' && (
           <EventGeneralTab
