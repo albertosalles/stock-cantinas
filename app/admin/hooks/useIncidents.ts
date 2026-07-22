@@ -6,6 +6,7 @@ import { resolveIncident } from '@/lib/incidents';
 export interface EnrichedIncident {
   id: string;
   type: string;
+  cantinaId: string;
   cantinaName: string;
   waiterName: string;
   productNames: string[];
@@ -49,6 +50,7 @@ export function useIncidents(eventId: string | undefined) {
       return rows.map((r: any) => ({
         id: r.id,
         type: r.type,
+        cantinaId: r.cantina_id,
         cantinaName: cantMap.get(r.cantina_id) ?? 'Cantina',
         waiterName: r.waiter_id ? (waitMap.get(r.waiter_id) ?? 'Camarero') : '—',
         productNames: (r.product_ids ?? []).map((pid: string) => prodMap.get(pid) ?? '¿?'),

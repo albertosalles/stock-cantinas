@@ -10,11 +10,13 @@ export interface EventProductRow {
   price_cents: number;
   low_stock_threshold: number;
   active: boolean;
+  featured: boolean;
   // Edit fields
   editPrice: string;
   editThreshold: string;
   editActive: boolean;
   editCategory: string;
+  editFeatured: boolean;
 }
 
 export function useAdminCatalog(eventId: string) {
@@ -26,7 +28,7 @@ export function useAdminCatalog(eventId: string) {
     setLoading(true);
     const { data: eventProds } = await supabase
       .from('event_products')
-      .select('id, product_id, price_cents, low_stock_threshold, active, products(name, sku, category)')
+      .select('id, product_id, price_cents, low_stock_threshold, active, featured, products(name, sku, category)')
       .eq('event_id', eventId);
 
     if (eventProds) {
@@ -39,10 +41,12 @@ export function useAdminCatalog(eventId: string) {
         price_cents: row.price_cents,
         low_stock_threshold: row.low_stock_threshold ?? 0,
         active: row.active ?? true,
+        featured: row.featured ?? false,
         editPrice: (row.price_cents / 100).toFixed(2),
         editThreshold: String(row.low_stock_threshold ?? 0),
         editActive: row.active ?? true,
         editCategory: row.products?.category ?? '',
+        editFeatured: row.featured ?? false,
       }));
 
       // Ordenar por SKU (alfanumérico)
@@ -76,7 +80,8 @@ export function useAdminCatalog(eventId: string) {
       .update({
         price_cents: Math.round(priceNum * 100),
         low_stock_threshold: thresholdNum,
-        active: row.editActive
+        active: row.editActive,
+        featured: row.editFeatured
       })
       .eq('id', row.id);
 

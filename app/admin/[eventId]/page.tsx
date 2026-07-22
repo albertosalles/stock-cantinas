@@ -7,57 +7,36 @@ import { useParams } from 'next/navigation';
 import AdminHeader from '../components/AdminHeader';
 import EventDashboardTab from '../components/EventDashboardTab';
 import EventGeneralTab from '../components/EventGeneralTab';
-import EventCantinasTab from '../components/EventCantinasTab';
+import EventCantinasHub from '../components/EventCantinasHub';
 import EventCatalogTab from '../components/EventCatalogTab';
-import EventInventoryTab from '../components/EventInventoryTab';
-import EventCantinasGrid from '../components/EventCantinasGrid';
-import EventPanelTab from '../components/EventPanelTab';
 import EventGlobalTab from '../components/EventGlobalTab';
 
 // Hooks de Lógica
 import { useAdminEvent } from '../hooks/useAdminEvent';
 import { useAdminCantinas } from '../hooks/useAdminCantinas';
 import { useAdminCatalog } from '../hooks/useAdminCatalog';
-import { useAdminInventory } from '../hooks/useAdminInventory';
-import { useAdminMetrics } from '../hooks/useAdminMetrics';
 import { useAdminGuard } from '../hooks/useAdminGuard';
 
-type TabKey = 'dashboard' | 'general' | 'cantinas' | 'catalogo' | 'inventario' | 'panel' | 'global';
+type TabKey = 'dashboard' | 'general' | 'cantinas' | 'catalogo' | 'global';
+
+const TAB_LABEL: Record<TabKey, string> = {
+  dashboard: '📊 Dashboard',
+  general: '⚙️ General',
+  cantinas: '🏪 Cantinas',
+  catalogo: '🛍️ Catálogo',
+  global: '🌍 Global',
+};
 
 export default function EventAdminPage() {
   const checked = useAdminGuard();
   const params = useParams();
   const eventId = (params as { eventId: string }).eventId;
 
-  // Estado de Navegación
   const [tab, setTab] = useState<TabKey>('dashboard');
 
-  // --- Hooks de Lógica ---
-
-  // 1. General del Evento
   const eventLogic = useAdminEvent(eventId);
-
-  // 2. Cantinas
-  const cantinasLogic = useAdminCantinas(eventId);
-
-  // 3. Catálogo de Productos
+  const cantinasLogic = useAdminCantinas(eventId); // usado por la vista Global
   const catalogLogic = useAdminCatalog(eventId);
-
-  // 4. Inventario (requiere cantina seleccionada)
-  const [inventoryCantinaId, setInventoryCantinaId] = useState<string>('');
-  const inventoryLogic = useAdminInventory(eventId, inventoryCantinaId, catalogLogic.eventProducts);
-
-  // 5. Métricas / Panel
-  const metricsLogic = useAdminMetrics(eventId, cantinasLogic.cantinas.filter(c => c.assigned));
-
-  // Manejadores de UI auxiliares
-  const handleTabChange = (newTab: TabKey) => {
-    setTab(newTab);
-    // Al entrar al panel, asegurar que tenemos datos frescos si hay cantina seleccionada
-    if (newTab === 'panel' && metricsLogic.panelCantinaId) {
-      metricsLogic.fetchPanelData(metricsLogic.panelCantinaId);
-    }
-  };
 
   if (!checked) {
     return (
@@ -69,6 +48,8 @@ export default function EventAdminPage() {
       </div>
     );
   }
+
+  const tabs = Object.keys(TAB_LABEL) as TabKey[];
 
   return (
     <div className="min-h-screen bg-elche-bg pb-24 md:pb-0">
@@ -82,22 +63,16 @@ export default function EventAdminPage() {
         eventId={eventId}
       >
         <nav className="flex gap-1">
-          {(['dashboard', 'general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
+          {tabs.map(key => (
             <button
               key={key}
-              onClick={() => handleTabChange(key)}
+              onClick={() => setTab(key)}
               className={`px-4 py-2 rounded-xl text-sm transition-all whitespace-nowrap ${tab === key
                 ? 'bg-white text-elche-primary font-bold shadow-sm'
                 : 'bg-transparent text-white/80 font-medium hover:bg-white/10 hover:text-white'
                 }`}
             >
-              {key === 'dashboard' && '📊 Dashboard'}
-              {key === 'general' && '⚙️ General'}
-              {key === 'cantinas' && '🏪 Cantinas'}
-              {key === 'catalogo' && '🛍️ Catálogo'}
-              {key === 'inventario' && '📦 Inventario'}
-              {key === 'panel' && '📈 Panel'}
-              {key === 'global' && '🌍 Global'}
+              {TAB_LABEL[key]}
             </button>
           ))}
         </nav>
@@ -106,30 +81,22 @@ export default function EventAdminPage() {
       {/* Navegación Móvil (Scroll horizontal sticky) */}
       <div className="md:hidden sticky top-0 z-40 bg-elche-bg/95 backdrop-blur-sm border-b border-elche-gray/50 overflow-x-auto">
         <div className="flex p-2 gap-2 min-w-max">
-          {(['dashboard', 'general', 'cantinas', 'catalogo', 'inventario', 'panel', 'global'] as TabKey[]).map(key => (
+          {tabs.map(key => (
             <button
               key={key}
-              onClick={() => handleTabChange(key)}
+              onClick={() => setTab(key)}
               className={`px-4 py-2 rounded-full text-sm transition-all border ${tab === key
                 ? 'bg-elche-primary text-white border-elche-primary font-bold shadow-md'
                 : 'bg-white text-elche-muted border-gray-200 font-medium'
                 }`}
             >
-              {key === 'dashboard' && '📊 Dashboard'}
-              {key === 'general' && '⚙️ General'}
-              {key === 'cantinas' && '🏪 Cantinas'}
-              {key === 'catalogo' && '🛍️ Catálogo'}
-              {key === 'inventario' && '📦 Inventario'}
-              {key === 'panel' && '📈 Panel'}
-              {key === 'global' && '🌍 Global'}
+              {TAB_LABEL[key]}
             </button>
           ))}
         </div>
       </div>
 
       <main className="max-w-[1600px] mx-auto p-4 md:p-8 animate-fade-in">
-
-        {/* Renderizado Condicional de Tabs */}
 
         {tab === 'dashboard' && (
           <EventDashboardTab eventId={eventId} eventName={eventLogic.eventName} />
@@ -146,12 +113,7 @@ export default function EventAdminPage() {
         )}
 
         {tab === 'cantinas' && (
-          <EventCantinasTab
-            cantinas={cantinasLogic.cantinas}
-            loading={cantinasLogic.loading}
-            onToggle={cantinasLogic.toggleCantina}
-            onCreate={cantinasLogic.createCantina}
-          />
+          <EventCantinasHub eventId={eventId} />
         )}
 
         {tab === 'catalogo' && (
@@ -165,51 +127,6 @@ export default function EventAdminPage() {
             onAdd={catalogLogic.addProduct}
             onCreateGlobal={catalogLogic.createGlobalProduct}
           />
-        )}
-
-        {tab === 'inventario' && (
-          <EventInventoryTab
-            cantinas={cantinasLogic.cantinas} // Pasamos todas, el componente filtra las asignadas
-            selectedCantinaId={inventoryCantinaId}
-            setSelectedCantinaId={setInventoryCantinaId}
-            loading={inventoryLogic.loading}
-            inventory={inventoryLogic.inventory}
-            products={catalogLogic.eventProducts}
-            eventId={eventId}
-
-            adjustForm={inventoryLogic.adjustForm}
-            setAdjustForm={inventoryLogic.setAdjustForm}
-            adjustType={inventoryLogic.adjustType}
-            setAdjustType={inventoryLogic.setAdjustType}
-            adjustReason={inventoryLogic.adjustReason}
-            setAdjustReason={inventoryLogic.setAdjustReason}
-            onApplyAdjust={inventoryLogic.applyAdjustments}
-
-            finalForm={inventoryLogic.finalForm}
-            setFinalForm={inventoryLogic.setFinalForm}
-            onSaveFinal={inventoryLogic.saveFinalInventory}
-
-            onRefresh={inventoryLogic.fetchInventoryData}
-          />
-        )}
-
-        {tab === 'panel' && (
-          <>
-            <EventCantinasGrid
-              eventId={eventId}
-              selectedId={metricsLogic.panelCantinaId}
-              onSelect={metricsLogic.setPanelCantinaId}
-            />
-            <EventPanelTab
-              cantinas={cantinasLogic.cantinas}
-              panelCantinaId={metricsLogic.panelCantinaId}
-              setPanelCantinaId={metricsLogic.setPanelCantinaId}
-              panelTotals={metricsLogic.panelTotals}
-              panelRows={metricsLogic.panelRows}
-              salesHistory={metricsLogic.salesHistory}
-              onRefresh={() => metricsLogic.panelCantinaId && metricsLogic.fetchPanelData(metricsLogic.panelCantinaId)}
-            />
-          </>
         )}
 
         {tab === 'global' && (

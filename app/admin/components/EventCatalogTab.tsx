@@ -54,6 +54,7 @@ export default function EventCatalogTab({
                   <th className="text-center p-3">Precio (€)</th>
                   <th className="text-center p-3">Umbral</th>
                   <th className="text-center p-3">Activo</th>
+                  <th className="text-center p-3" title="Se muestra en las tarjetas de cantina">⭐ Destacado</th>
                   <th className="text-right p-3">Acciones</th>
                 </tr>
               </thead>
@@ -99,6 +100,14 @@ export default function EventCatalogTab({
                         checked={row.editActive}
                         onChange={e => setEventProducts(l => l.map(r => r.id === row.id ? { ...r, editActive: e.target.checked } : r))}
                         className="w-5 h-5 accent-elche-primary rounded cursor-pointer"
+                      />
+                    </td>
+                    <td className="p-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={row.editFeatured}
+                        onChange={e => setEventProducts(l => l.map(r => r.id === row.id ? { ...r, editFeatured: e.target.checked } : r))}
+                        className="w-5 h-5 accent-amber-500 rounded cursor-pointer"
                       />
                     </td>
                     <td className="p-3 text-right space-x-2">

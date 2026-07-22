@@ -25,12 +25,14 @@ interface EventInventoryTabProps {
   onApplyAdjust: () => void;
   onSaveFinal: () => void;
   onRefresh: () => void;
+  /** Oculta el selector de cantina (cuando ya estamos en el detalle de una). */
+  hideSelector?: boolean;
 }
 
 export default function EventInventoryTab({
   cantinas, selectedCantinaId, setSelectedCantinaId, loading, inventory, products, eventId,
   adjustForm, setAdjustForm, adjustType, setAdjustType, adjustReason, setAdjustReason,
-  finalForm, setFinalForm, onApplyAdjust, onSaveFinal, onRefresh
+  finalForm, setFinalForm, onApplyAdjust, onSaveFinal, onRefresh, hideSelector
 }: EventInventoryTabProps) {
 
   const invMap = new Map(inventory.map(r => [r.product_id, r]));
@@ -62,7 +64,7 @@ export default function EventInventoryTab({
       </div>
 
       {/* Selector Cantina */}
-      <div className="mb-6 p-4 bg-elche-gray/20 rounded-2xl border border-elche-gray/50 flex flex-col md:flex-row gap-4 items-center">
+      <div className={`mb-6 p-4 bg-elche-gray/20 rounded-2xl border border-elche-gray/50 flex flex-col md:flex-row gap-4 items-center ${hideSelector ? 'hidden' : ''}`}>
         <span className="font-bold text-elche-text text-sm uppercase tracking-wide">Selecciona Cantina:</span>
         <select
           value={selectedCantinaId}
