@@ -10,6 +10,7 @@ import EventGeneralTab from '../components/EventGeneralTab';
 import EventCantinasTab from '../components/EventCantinasTab';
 import EventCatalogTab from '../components/EventCatalogTab';
 import EventInventoryTab from '../components/EventInventoryTab';
+import EventCantinasGrid from '../components/EventCantinasGrid';
 import EventPanelTab from '../components/EventPanelTab';
 import EventGlobalTab from '../components/EventGlobalTab';
 
@@ -193,15 +194,22 @@ export default function EventAdminPage() {
         )}
 
         {tab === 'panel' && (
-          <EventPanelTab
-            cantinas={cantinasLogic.cantinas}
-            panelCantinaId={metricsLogic.panelCantinaId}
-            setPanelCantinaId={metricsLogic.setPanelCantinaId}
-            panelTotals={metricsLogic.panelTotals}
-            panelRows={metricsLogic.panelRows}
-            salesHistory={metricsLogic.salesHistory}
-            onRefresh={() => metricsLogic.panelCantinaId && metricsLogic.fetchPanelData(metricsLogic.panelCantinaId)}
-          />
+          <>
+            <EventCantinasGrid
+              eventId={eventId}
+              selectedId={metricsLogic.panelCantinaId}
+              onSelect={metricsLogic.setPanelCantinaId}
+            />
+            <EventPanelTab
+              cantinas={cantinasLogic.cantinas}
+              panelCantinaId={metricsLogic.panelCantinaId}
+              setPanelCantinaId={metricsLogic.setPanelCantinaId}
+              panelTotals={metricsLogic.panelTotals}
+              panelRows={metricsLogic.panelRows}
+              salesHistory={metricsLogic.salesHistory}
+              onRefresh={() => metricsLogic.panelCantinaId && metricsLogic.fetchPanelData(metricsLogic.panelCantinaId)}
+            />
+          </>
         )}
 
         {tab === 'global' && (

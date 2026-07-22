@@ -16,32 +16,27 @@ export default function EventPanelTab({
 }: EventPanelTabProps) {
   return (
     <section className="bg-white p-6 rounded-3xl shadow-sm border border-elche-gray/50 mb-10">
-      <div className="font-bold text-xl mb-6 text-elche-text border-b border-elche-gray/50 pb-4 flex items-center gap-2">
-        <span className="bg-elche-primary/10 p-2 rounded-xl text-elche-primary">📈</span>
-        Panel de métricas por cantina
+      <div className="flex items-center justify-between mb-6 border-b border-elche-gray/50 pb-4 gap-3 flex-wrap">
+        <div className="font-bold text-xl text-elche-text flex items-center gap-2">
+          <span className="bg-elche-primary/10 p-2 rounded-xl text-elche-primary">📈</span>
+          {panelCantinaId ? `Detalle · ${cantinas.find(c => c.id === panelCantinaId)?.name ?? ''}` : 'Detalle por cantina'}
+        </div>
+        {panelCantinaId && (
+          <button
+            onClick={onRefresh}
+            className="px-5 py-2.5 rounded-xl bg-white border border-elche-gray text-elche-text font-bold text-sm hover:bg-elche-gray/50 shadow-sm transition-colors"
+          >
+            🔄 Refrescar
+          </button>
+        )}
       </div>
 
-      {/* Selector */}
-      <div className="flex gap-4 items-center mb-8 p-4 bg-elche-gray/20 rounded-2xl border border-elche-gray/50 flex-wrap">
-        <label className="opacity-80 text-sm font-bold uppercase tracking-wide">Cantina:</label>
-        <select
-          value={panelCantinaId ?? ''}
-          onChange={(e) => setPanelCantinaId(e.target.value || null)}
-          className="p-3 rounded-xl border border-elche-gray font-bold text-elche-text bg-white focus:ring-2 focus:ring-elche-primary focus:outline-none min-w-[200px]"
-        >
-          {cantinas.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-
-        <button
-          onClick={onRefresh}
-          className="ml-auto px-5 py-3 rounded-xl bg-white border border-elche-gray text-elche-text font-bold text-sm hover:bg-elche-gray/50 shadow-sm transition-colors"
-        >
-          🔄 Refrescar
-        </button>
-      </div>
-
+      {!panelCantinaId ? (
+        <div className="py-12 text-center text-elche-text-light italic bg-elche-gray/5 rounded-2xl border border-dashed border-elche-gray/50">
+          👆 Selecciona una cantina del grid de arriba para ver su detalle
+        </div>
+      ) : (
+      <>
       {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
         <div className="bg-gradient-to-br from-elche-primary to-elche-secondary p-6 rounded-3xl shadow-lg shadow-elche-primary/20 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform">
@@ -124,6 +119,8 @@ export default function EventPanelTab({
             ))}
           </div>
         </>
+      )}
+      </>
       )}
     </section>
   );
