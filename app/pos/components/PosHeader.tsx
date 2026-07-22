@@ -8,6 +8,7 @@ interface PosHeaderProps {
   // Nuevas props para el modo offline
   pendingUploads?: number;
   onManualSync?: () => void;
+  onReportIncident?: () => void;
 }
 
 export default function PosHeader({
@@ -16,7 +17,8 @@ export default function PosHeader({
   waiterName,
   onLogout,
   pendingUploads = 0,
-  onManualSync
+  onManualSync,
+  onReportIncident
 }: PosHeaderProps) {
 
   return (
@@ -45,6 +47,17 @@ export default function PosHeader({
             >
               <span className="text-sm">☁️</span>
               <span>{pendingUploads} <span className="hidden sm:inline">Pendientes</span></span>
+            </button>
+          )}
+
+          {/* BOTÓN INCIDENCIA */}
+          {onReportIncident && (
+            <button
+              onClick={onReportIncident}
+              className="p-2 rounded-lg bg-white/10 text-white hover:bg-amber-400/30 transition-colors backdrop-blur-sm border border-white/10"
+              title="Reportar incidencia"
+            >
+              <span className="text-lg leading-none">⚠️</span>
             </button>
           )}
 

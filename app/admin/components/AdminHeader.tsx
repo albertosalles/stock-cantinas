@@ -2,6 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 
 import NotificationBell from './NotificationBell';
+import IncidentsBell from './IncidentsBell';
 
 interface AdminHeaderProps {
   title?: string;
@@ -43,6 +44,7 @@ export default function AdminHeader({
               </div>
             )}
 
+            {eventId && <IncidentsBell eventId={eventId} />}
             {eventId && <NotificationBell eventId={eventId} />}
           </div>
         </div>

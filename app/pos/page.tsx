@@ -13,6 +13,8 @@ import PosSalesTab from './components/PosSalesTab';
 import PosInventoryTab from './components/PosInventoryTab';
 import PosHistoryTab from './components/PosHistoryTab';
 import PaymentMethodModal from './components/PaymentMethodModal';
+import IncidentModal from './components/IncidentModal';
+import { reportIncident } from '@/lib/incidents';
 
 export default function PosPage() {
   // 1. Hooks de Datos y Sesión
@@ -36,6 +38,7 @@ export default function PosPage() {
   const [tab, setTab] = useState<'venta' | 'inventario' | 'ventas'>('venta');
   const [processing, setProcessing] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showIncidentModal, setShowIncidentModal] = useState(false);
 
   // Pantalla de carga inicial
   if (!session.sessionChecked) {
@@ -195,6 +198,28 @@ export default function PosPage() {
     handleSell();
   };
 
+  // Reportar incidencia (online-only: es un aviso, no una transacción)
+  const handleReportIncident = async (input: { type: any; productIds: string[]; description: string }) => {
+    if (!navigator.onLine) {
+      toast.error('Sin conexión: no se puede reportar la incidencia ahora', { duration: 3000 });
+      return;
+    }
+    try {
+      await reportIncident({
+        eventId: session.eventId,
+        cantinaId: session.cantinaId,
+        waiterId: session.waiterId,
+        type: input.type,
+        productIds: input.productIds,
+        description: input.description,
+      });
+      toast.success('Incidencia enviada al administrador', { duration: 2500 });
+    } catch (e: any) {
+      toast.error(e.message || 'No se pudo enviar la incidencia', { duration: 3000 });
+      throw e;
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 pb-20 md:pb-0">
       <Toaster position="top-center" />
@@ -219,6 +244,15 @@ export default function PosPage() {
         onLogout={session.logout}
         pendingUploads={pendingCount}
         onManualSync={syncQueue}
+        onReportIncident={() => setShowIncidentModal(true)}
+      />
+
+      {/* Modal de reporte de incidencia */}
+      <IncidentModal
+        visible={showIncidentModal}
+        products={products}
+        onClose={() => setShowIncidentModal(false)}
+        onSubmit={handleReportIncident}
       />
 
       {/* PESTAÑAS DE NAVEGACIÓN (Solo visible en móvil normalmente, o integrado en header) */}
