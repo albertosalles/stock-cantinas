@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 
 // Componentes UI
 import AdminHeader from '../components/AdminHeader';
@@ -9,6 +9,7 @@ import EventDashboardTab from '../components/EventDashboardTab';
 import EventGeneralTab from '../components/EventGeneralTab';
 import EventCantinasHub from '../components/EventCantinasHub';
 import EventCatalogTab from '../components/EventCatalogTab';
+import WaiterAssignmentPanel from '../components/WaiterAssignmentPanel';
 import WaiterPerformanceTable from '../components/WaiterPerformanceTable';
 import EventGlobalTab from '../components/EventGlobalTab';
 
@@ -32,9 +33,21 @@ const TAB_LABEL: Record<TabKey, string> = {
 export default function EventAdminPage() {
   const checked = useAdminGuard();
   const params = useParams();
+  const searchParams = useSearchParams();
   const eventId = (params as { eventId: string }).eventId;
 
+
   const [tab, setTab] = useState<TabKey>('dashboard');
+
+// <-- NUEVO: Efecto que cambia la pestaña si detecta el parámetro en la URL
+  useEffect(() => {
+    const queryTab = searchParams.get('tab') as TabKey;
+    // Verificamos que el parámetro exista y sea una pestaña válida
+    if (queryTab && Object.keys(TAB_LABEL).includes(queryTab)) {
+      setTab(queryTab);
+    }
+  }, [searchParams]);
+
 
   const eventLogic = useAdminEvent(eventId);
   const cantinasLogic = useAdminCantinas(eventId); // usado por la vista Global
@@ -119,7 +132,10 @@ export default function EventAdminPage() {
         )}
 
         {tab === 'personal' && (
-          <WaiterPerformanceTable eventId={eventId} />
+          <>
+            <WaiterAssignmentPanel eventId={eventId} />
+            <WaiterPerformanceTable eventId={eventId} />
+          </>
         )}
 
         {tab === 'catalogo' && (

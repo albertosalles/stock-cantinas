@@ -54,12 +54,12 @@ export default function CantinaDetailPage() {
         title={cantinaName}
         subtitle={event.eventName || 'Evento'}
         showBack
-        backUrl={`/admin/${eventId}`}
+        backUrl={`/admin/${eventId}?tab=cantinas`}
         eventId={eventId}
       />
 
       <main className="max-w-[1600px] mx-auto p-4 md:p-8 grid gap-8">
-        <Link href={`/admin/${eventId}`} className="text-sm font-bold text-elche-primary hover:underline w-fit">
+        <Link href={`/admin/${eventId}?tab=cantinas`} className="text-sm font-bold text-elche-primary hover:underline w-fit">
           ← Volver a cantinas
         </Link>
         
