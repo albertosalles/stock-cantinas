@@ -9,6 +9,7 @@ import EventDashboardTab from '../components/EventDashboardTab';
 import EventGeneralTab from '../components/EventGeneralTab';
 import EventCantinasHub from '../components/EventCantinasHub';
 import EventCatalogTab from '../components/EventCatalogTab';
+import WaiterPerformanceTable from '../components/WaiterPerformanceTable';
 import EventGlobalTab from '../components/EventGlobalTab';
 
 // Hooks de Lógica
@@ -17,12 +18,13 @@ import { useAdminCantinas } from '../hooks/useAdminCantinas';
 import { useAdminCatalog } from '../hooks/useAdminCatalog';
 import { useAdminGuard } from '../hooks/useAdminGuard';
 
-type TabKey = 'dashboard' | 'general' | 'cantinas' | 'catalogo' | 'global';
+type TabKey = 'dashboard' | 'general' | 'cantinas' | 'personal' | 'catalogo' | 'global';
 
 const TAB_LABEL: Record<TabKey, string> = {
   dashboard: '📊 Dashboard',
   general: '⚙️ General',
   cantinas: '🏪 Cantinas',
+  personal: '👥 Personal',
   catalogo: '🛍️ Catálogo',
   global: '🌍 Global',
 };
@@ -114,6 +116,10 @@ export default function EventAdminPage() {
 
         {tab === 'cantinas' && (
           <EventCantinasHub eventId={eventId} />
+        )}
+
+        {tab === 'personal' && (
+          <WaiterPerformanceTable eventId={eventId} />
         )}
 
         {tab === 'catalogo' && (

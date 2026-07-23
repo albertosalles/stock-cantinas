@@ -10,6 +10,7 @@ import EventPanelTab from '../../../components/EventPanelTab';
 import EventInventoryTab from '../../../components/EventInventoryTab';
 import CantinaIncidentsPanel from '../../../components/CantinaIncidentsPanel';
 import CantinaWaitersPanel from '../../../components/CantinaWaitersPanel';
+import WaiterPerformanceTable from '../../../components/WaiterPerformanceTable';
 
 import { useAdminGuard } from '../../../hooks/useAdminGuard';
 import { useAdminEvent } from '../../../hooks/useAdminEvent';
@@ -61,6 +62,7 @@ export default function CantinaDetailPage() {
         <Link href={`/admin/${eventId}`} className="text-sm font-bold text-elche-primary hover:underline w-fit">
           ← Volver a cantinas
         </Link>
+        
 
         {/* Métricas + historial de la cantina */}
         <EventPanelTab
@@ -78,6 +80,9 @@ export default function CantinaDetailPage() {
 
         {/* Asignar camareros */}
         <CantinaWaitersPanel eventId={eventId} cantinaId={cantinaId} />
+
+        {/* Rendimiento de los camareros en esta cantina */}
+        <WaiterPerformanceTable eventId={eventId} cantinaId={cantinaId} compact />
 
         {/* Modificar inventario */}
         <EventInventoryTab
