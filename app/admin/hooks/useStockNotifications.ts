@@ -18,19 +18,24 @@ export function useStockNotifications(eventId: string | undefined) {
         queryKey: ['stock_notifications', eventId],
         enabled: !!eventId,
         queryFn: async () => {
-            // 1. Fetch items with low stock (raw IDs)
+            // 1. Productos bajo mínimo.
+            //
+            // Sólo se avisa al administrador de los productos para los que ÉL ha
+            // definido un umbral. `low_stock_threshold` es 0 por defecto en la BD,
+            // así que 0 significa "sin umbral definido", no "avisar al agotarse":
+            // por eso se exige > 0 y no basta con comprobar que no sea NULL.
             const { data: inventoryData, error: invError } = await supabase
                 .from('v_cantina_inventory')
                 .select('cantina_id, product_id, current_qty, low_stock_threshold')
                 .eq('event_id', eventId)
-                .not('low_stock_threshold', 'is', null);
+                .gt('low_stock_threshold', 0);
 
             if (invError) throw invError;
 
             const rawItems = (inventoryData ?? []).filter((item: any) => {
                 const qty = item.current_qty ?? 0;
-                const threshold = item.low_stock_threshold;
-                return threshold !== null && qty <= threshold;
+                const threshold = item.low_stock_threshold ?? 0;
+                return threshold > 0 && qty <= threshold;
             });
 
             if (rawItems.length === 0) return [];

@@ -9,9 +9,18 @@ interface SeasonsSectionProps {
   onCreate: (name: string, startsOn?: string, endsOn?: string) => Promise<void>;
   onActivate: (id: string) => Promise<void>;
   onClose: (id: string) => Promise<void>;
+  /** Nº de eventos por temporada (id → total). */
+  eventCounts?: Record<string, number>;
 }
 
-export default function SeasonsSection({ seasons, loading, onCreate, onActivate, onClose }: SeasonsSectionProps) {
+export default function SeasonsSection({
+  seasons,
+  loading,
+  onCreate,
+  onActivate,
+  onClose,
+  eventCounts = {},
+}: SeasonsSectionProps) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [startsOn, setStartsOn] = useState('');
@@ -32,35 +41,60 @@ export default function SeasonsSection({ seasons, loading, onCreate, onActivate,
   };
 
   return (
-    <section className="bg-white p-6 rounded-3xl shadow-sm border border-elche-gray/50">
-      <div className="flex items-center justify-between mb-5 border-b border-elche-gray/50 pb-4">
-        <div className="font-bold text-xl text-elche-text flex items-center gap-2">
-          <span className="bg-elche-primary/10 p-2 rounded-xl text-elche-primary">🗓️</span>
-          Temporadas
+    <section className="animate-fade-in">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex items-center gap-3">
+          <span className="ms rounded-xl bg-elche-primary/[0.09] p-2.5 text-[22px] text-elche-primary">
+            calendar_month
+          </span>
+          <div>
+            <h2 className="m-0 text-[17px] font-extrabold tracking-tight">Temporadas</h2>
+            <div className="text-xs font-medium text-elche-text-light">Organiza los eventos por campaña</div>
+          </div>
         </div>
         <button
           onClick={() => setShowForm(s => !s)}
-          className="px-4 py-2 rounded-xl bg-elche-primary/10 text-elche-primary font-bold text-sm hover:bg-elche-primary/20 transition-colors"
+          className="flex items-center gap-1.5 rounded-[11px] border border-elche-gray bg-white px-4 py-2.5 text-[13px] font-semibold text-elche-text transition-colors hover:border-elche-primary hover:text-elche-primary"
         >
-          {showForm ? 'Cancelar' : '➕ Nueva temporada'}
+          <span className="ms text-lg">{showForm ? 'close' : 'add'}</span>
+          {showForm ? 'Cancelar' : 'Nueva temporada'}
         </button>
       </div>
 
       {showForm && (
-        <div className="mb-5 p-4 bg-elche-gray/20 rounded-2xl border border-elche-gray/50 grid gap-3 md:grid-cols-[1fr_auto_auto_auto]">
-          <input
-            value={name} onChange={e => setName(e.target.value)}
-            placeholder="Nombre (ej: Temporada 2026-27)"
-            className="p-3 rounded-xl border border-elche-gray bg-white font-bold focus:ring-2 focus:ring-elche-primary focus:outline-none"
-          />
-          <input type="date" value={startsOn} onChange={e => setStartsOn(e.target.value)}
-            className="p-3 rounded-xl border border-elche-gray bg-white text-sm focus:ring-2 focus:ring-elche-primary focus:outline-none" />
-          <input type="date" value={endsOn} onChange={e => setEndsOn(e.target.value)}
-            className="p-3 rounded-xl border border-elche-gray bg-white text-sm focus:ring-2 focus:ring-elche-primary focus:outline-none" />
+        <div className="mb-4 grid animate-fade-in gap-3 rounded-2xl border border-elche-gray bg-white p-4 md:grid-cols-[1fr_auto_auto_auto]">
+          <div>
+            <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[#8aa397]">
+              Nombre
+            </label>
+            <input
+              value={name} onChange={e => setName(e.target.value)}
+              placeholder="Ej: Temporada 2026/27"
+              className="w-full rounded-[10px] border border-[#e0efe7] bg-[#f9fcfb] px-3 py-2.5 text-[13.5px] text-elche-text outline-none focus:border-elche-primary focus:bg-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[#8aa397]">
+              Inicio
+            </label>
+            <input
+              type="date" value={startsOn} onChange={e => setStartsOn(e.target.value)}
+              className="w-full rounded-[10px] border border-[#e0efe7] bg-[#f9fcfb] px-3 py-2.5 text-[13.5px] text-elche-text outline-none focus:border-elche-primary focus:bg-white"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.08em] text-[#8aa397]">
+              Fin
+            </label>
+            <input
+              type="date" value={endsOn} onChange={e => setEndsOn(e.target.value)}
+              className="w-full rounded-[10px] border border-[#e0efe7] bg-[#f9fcfb] px-3 py-2.5 text-[13.5px] text-elche-text outline-none focus:border-elche-primary focus:bg-white"
+            />
+          </div>
           <button
             onClick={handleCreate}
             disabled={saving || !name.trim()}
-            className="px-6 py-3 rounded-xl bg-elche-primary text-white font-bold disabled:opacity-50 hover:bg-elche-secondary transition-colors"
+            className="self-end rounded-[10px] bg-elche-primary px-5 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-elche-secondary disabled:opacity-50"
           >
             {saving ? '⏳' : 'Crear'}
           </button>
@@ -69,56 +103,72 @@ export default function SeasonsSection({ seasons, loading, onCreate, onActivate,
 
       {loading ? (
         <div className="py-8 text-center text-elche-text-light">Cargando temporadas...</div>
+      ) : seasons.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-elche-border bg-white/50 py-10 text-center italic text-elche-text-light">
+          Aún no hay temporadas creadas
+        </div>
       ) : (
-        <div className="grid gap-3">
-          {seasons.map(s => (
-            <div key={s.id} className={`flex flex-col md:flex-row md:items-center justify-between p-4 rounded-2xl border gap-3 ${s.active ? 'bg-elche-success/5 border-elche-success/30' : 'bg-white border-elche-gray/50'}`}>
-              <div>
-                <div className="font-bold text-elche-text flex items-center gap-2">
-                  {s.name}
-                  {s.active && (
-                    <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border border-green-200">
-                      Activa
-                    </span>
-                  )}
-                  {s.status === 'closed' && (
-                    <span className="bg-gray-100 text-gray-500 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide border border-gray-200">
-                      Cerrada
-                    </span>
+        <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
+          {seasons.map(s => {
+            const closed = s.status === 'closed';
+            const count = eventCounts[s.id] ?? 0;
+            return (
+              <div
+                key={s.id}
+                className={`rounded-2xl border bg-white p-4 ${
+                  s.active ? 'border-[#bfe3cf] shadow-[0_4px_14px_rgba(0,150,79,.09)]' : 'border-elche-gray'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="min-w-0">
+                    <div className="truncate text-[15px] font-extrabold tracking-tight text-elche-text">{s.name}</div>
+                    <div className="mt-0.5 text-xs font-medium text-elche-text-light">
+                      {count} {count === 1 ? 'evento' : 'eventos'}
+                    </div>
+                    <div className="mt-0.5 text-[11px] font-medium text-[#8aa397]">
+                      {s.starts_on ? new Date(s.starts_on).toLocaleDateString('es-ES') : '—'} →{' '}
+                      {s.ends_on ? new Date(s.ends_on).toLocaleDateString('es-ES') : '—'}
+                    </div>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-bold ${
+                      s.active
+                        ? 'bg-elche-primary/10 text-elche-primary'
+                        : closed
+                          ? 'bg-[#f0f2f1] text-[#8aa397]'
+                          : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {s.active ? 'Activa' : closed ? 'Cerrada' : 'Abierta'}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  {s.active ? (
+                    <button
+                      onClick={() => confirm(`¿Cerrar la temporada "${s.name}"?`) && onClose(s.id)}
+                      className="flex-1 rounded-[10px] border border-elche-gray bg-elche-bg py-2.5 text-[12.5px] font-semibold text-elche-text-light transition-colors hover:border-elche-danger/40 hover:text-elche-danger"
+                    >
+                      Cerrar temporada
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() =>
+                        confirm(
+                          closed
+                            ? `¿Reabrir y activar "${s.name}"?`
+                            : `¿Activar "${s.name}"? La temporada activa actual dejará de estarlo.`
+                        ) && onActivate(s.id)
+                      }
+                      className="flex-1 rounded-[10px] bg-elche-primary py-2.5 text-[12.5px] font-semibold text-white transition-colors hover:bg-elche-secondary"
+                    >
+                      {closed ? 'Reactivar' : 'Activar'}
+                    </button>
                   )}
                 </div>
-                <div className="text-xs text-elche-text-light font-medium mt-0.5">
-                  {s.starts_on ? new Date(s.starts_on).toLocaleDateString('es-ES') : '—'} → {s.ends_on ? new Date(s.ends_on).toLocaleDateString('es-ES') : '—'}
-                </div>
               </div>
-              <div className="flex gap-2">
-                {!s.active && s.status === 'open' && (
-                  <button
-                    onClick={() => confirm(`¿Activar "${s.name}"? La temporada activa actual dejará de estarlo.`) && onActivate(s.id)}
-                    className="px-4 py-2 rounded-xl bg-elche-primary text-white font-bold text-xs hover:bg-elche-secondary transition-colors"
-                  >
-                    Activar
-                  </button>
-                )}
-                {s.status === 'closed' && (
-                  <button
-                    onClick={() => confirm(`¿Reabrir y activar "${s.name}"?`) && onActivate(s.id)}
-                    className="px-4 py-2 rounded-xl bg-white border border-elche-gray text-elche-text font-bold text-xs hover:bg-elche-gray/30 transition-colors"
-                  >
-                    Reabrir
-                  </button>
-                )}
-                {s.status === 'open' && (
-                  <button
-                    onClick={() => confirm(`¿Cerrar la temporada "${s.name}"?`) && onClose(s.id)}
-                    className="px-4 py-2 rounded-xl bg-white border border-elche-gray text-elche-text-light font-bold text-xs hover:text-elche-danger hover:border-elche-danger/40 transition-colors"
-                  >
-                    🔒 Cerrar
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>

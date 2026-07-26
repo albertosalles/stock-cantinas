@@ -47,17 +47,14 @@ export default function NotificationBell({ eventId }: NotificationBellProps) {
         <div className="relative" onClick={e => e.stopPropagation()}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white"
+                className="relative flex h-10 w-10 items-center justify-center rounded-[11px] border border-elche-gray bg-elche-bg text-elche-text-light transition-colors hover:bg-red-50 hover:text-red-500"
                 title="Notificaciones de Stock"
             >
-                {/* Bell Icon */}
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                </svg>
+                <span className="ms text-xl">notifications</span>
 
                 {/* Badge */}
                 {count > 0 && (
-                    <span className="absolute top-0 right-0 transform translate-x-1/3 -translate-y-1/3 bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full shadow-sm border border-white/20">
+                    <span className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-[9px] border-2 border-white bg-red-500 px-1 text-[10px] font-bold text-white">
                         {count}
                     </span>
                 )}

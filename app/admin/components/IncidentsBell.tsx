@@ -29,12 +29,12 @@ export default function IncidentsBell({ eventId }: IncidentsBellProps) {
     <div className="relative" onClick={e => e.stopPropagation()}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-full bg-white/10 hover:bg-white/20 transition-colors text-white"
+        className="relative flex h-10 w-10 items-center justify-center rounded-[11px] border border-elche-gray bg-elche-bg text-elche-text-light transition-colors hover:bg-amber-50 hover:text-amber-500"
         title="Incidencias reportadas"
       >
-        <span className="text-xl leading-none">⚠️</span>
+        <span className="ms text-xl">report</span>
         {count > 0 && (
-          <span className="absolute top-0 right-0 transform translate-x-1/3 -translate-y-1/3 bg-amber-400 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full shadow-sm border border-white/20 animate-pulse">
+          <span className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-[9px] border-2 border-white bg-amber-500 px-1 text-[10px] font-bold text-white">
             {count}
           </span>
         )}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useLiveInventory } from '@/hooks/useLiveInventory';
+import { stockLevel } from '@/lib/adminUi';
 
 export interface CantinaMetrics {
   stock_total: number;
@@ -52,7 +53,11 @@ export function useAdminMetrics(eventId: string, assignedCantinas: { id: string 
       const id = row.cantina_id;
       if (!metricsMap[id]) return;
       metricsMap[id].stock_total += row.current_qty ?? 0;
-      if ((row.current_qty ?? 0) <= (row.low_stock_threshold ?? 0)) metricsMap[id].low_stock += 1;
+      // Cuenta lo que no está correcto: agotado (siempre) o bajo el umbral
+      // que haya definido el administrador.
+      if (stockLevel(row.current_qty ?? 0, row.low_stock_threshold ?? 0) !== 'ok') {
+        metricsMap[id].low_stock += 1;
+      }
     });
 
     // Sales Data

@@ -2,16 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Componentes UI
-import AdminHeader from '../components/AdminHeader';
+import AdminShell, { AdminNavItem, HeaderIconButton } from '../components/AdminShell';
 import EventDashboardTab from '../components/EventDashboardTab';
 import EventGeneralTab from '../components/EventGeneralTab';
 import EventCantinasHub from '../components/EventCantinasHub';
 import EventCatalogTab from '../components/EventCatalogTab';
-import WaiterAssignmentPanel from '../components/WaiterAssignmentPanel';
-import WaiterPerformanceTable from '../components/WaiterPerformanceTable';
+import EventPersonalTab from '../components/EventPersonalTab';
 import EventGlobalTab from '../components/EventGlobalTab';
+import IncidentsBell from '../components/IncidentsBell';
+import NotificationBell from '../components/NotificationBell';
 
 // Hooks de Lógica
 import { useAdminEvent } from '../hooks/useAdminEvent';
@@ -19,35 +21,33 @@ import { useAdminCantinas } from '../hooks/useAdminCantinas';
 import { useAdminCatalog } from '../hooks/useAdminCatalog';
 import { useAdminGuard } from '../hooks/useAdminGuard';
 
-type TabKey = 'dashboard' | 'general' | 'cantinas' | 'personal' | 'catalogo' | 'global';
+type TabKey = 'dashboard' | 'cantinas' | 'personal' | 'catalogo' | 'global' | 'general';
 
-const TAB_LABEL: Record<TabKey, string> = {
-  dashboard: '📊 Dashboard',
-  general: '⚙️ General',
-  cantinas: '🏪 Cantinas',
-  personal: '👥 Personal',
-  catalogo: '🛍️ Catálogo',
-  global: '🌍 Global',
-};
+const NAV: AdminNavItem[] = [
+  { key: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+  { key: 'cantinas', label: 'Cantinas', icon: 'storefront' },
+  { key: 'personal', label: 'Personal', icon: 'groups' },
+  { key: 'catalogo', label: 'Catálogo', icon: 'inventory_2' },
+  { key: 'global', label: 'Global', icon: 'public' },
+  { key: 'general', label: 'General', icon: 'settings' },
+];
+
+const TAB_KEYS = NAV.map(n => n.key);
 
 export default function EventAdminPage() {
   const checked = useAdminGuard();
   const params = useParams();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const eventId = (params as { eventId: string }).eventId;
-
 
   const [tab, setTab] = useState<TabKey>('dashboard');
 
-// <-- NUEVO: Efecto que cambia la pestaña si detecta el parámetro en la URL
+  // Permite entrar directamente a una pestaña vía ?tab=cantinas
   useEffect(() => {
     const queryTab = searchParams.get('tab') as TabKey;
-    // Verificamos que el parámetro exista y sea una pestaña válida
-    if (queryTab && Object.keys(TAB_LABEL).includes(queryTab)) {
-      setTab(queryTab);
-    }
+    if (queryTab && TAB_KEYS.includes(queryTab)) setTab(queryTab);
   }, [searchParams]);
-
 
   const eventLogic = useAdminEvent(eventId);
   const cantinasLogic = useAdminCantinas(eventId); // usado por la vista Global
@@ -55,112 +55,85 @@ export default function EventAdminPage() {
 
   if (!checked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-elche-bg">
+      <div className="flex min-h-screen items-center justify-center bg-elche-bg">
         <div className="text-center">
-          <div className="text-5xl mb-4 animate-pulse">⏳</div>
-          <div className="text-lg text-slate-600 font-medium">Verificando acceso...</div>
+          <div className="ms mb-4 animate-pulse text-5xl text-elche-primary">hourglass_top</div>
+          <div className="text-lg font-medium text-elche-text-light">Verificando acceso...</div>
         </div>
       </div>
     );
   }
 
-  const tabs = Object.keys(TAB_LABEL) as TabKey[];
+  /** Refresca todo lo que depende de datos en vivo del evento. */
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['event_dashboard', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['cantinas_grid', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['sales_by_hour', eventId] });
+    queryClient.invalidateQueries({ queryKey: ['waiter_performance'] });
+    catalogLogic.fetchCatalog();
+  };
+
+  const subtitle = eventLogic.eventDate
+    ? new Date(eventLogic.eventDate).toLocaleDateString('es-ES', {
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+      })
+    : 'Sin fecha asignada';
 
   return (
-    <div className="min-h-screen bg-elche-bg pb-24 md:pb-0">
+    <AdminShell
+      title={eventLogic.eventName || 'Administración de Evento'}
+      subtitle={subtitle}
+      navSectionLabel="Evento"
+      navItems={NAV}
+      activeKey={tab}
+      onNavigate={key => setTab(key as TabKey)}
+      backHref="/admin"
+      status={eventLogic.eventStatus}
+      headerActions={
+        <>
+          <HeaderIconButton icon="refresh" title="Refrescar" onClick={refreshAll} />
+          <IncidentsBell eventId={eventId} />
+          <NotificationBell eventId={eventId} />
+        </>
+      }
+    >
+      {tab === 'dashboard' && <EventDashboardTab eventId={eventId} />}
 
-      {/* Header y Navegación */}
-      <AdminHeader
-        title={eventLogic.eventName || 'Administración de Evento'}
-        subtitle={eventLogic.eventDate ? new Date(eventLogic.eventDate).toLocaleDateString() : 'Cargando...'}
-        showBack={true}
-        backUrl="/admin"
-        eventId={eventId}
-      >
-        <nav className="flex gap-1">
-          {tabs.map(key => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`px-4 py-2 rounded-xl text-sm transition-all whitespace-nowrap ${tab === key
-                ? 'bg-white text-elche-primary font-bold shadow-sm'
-                : 'bg-transparent text-white/80 font-medium hover:bg-white/10 hover:text-white'
-                }`}
-            >
-              {TAB_LABEL[key]}
-            </button>
-          ))}
-        </nav>
-      </AdminHeader>
+      {tab === 'cantinas' && <EventCantinasHub eventId={eventId} />}
 
-      {/* Navegación Móvil (Scroll horizontal sticky) */}
-      <div className="md:hidden sticky top-0 z-40 bg-elche-bg/95 backdrop-blur-sm border-b border-elche-gray/50 overflow-x-auto">
-        <div className="flex p-2 gap-2 min-w-max">
-          {tabs.map(key => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`px-4 py-2 rounded-full text-sm transition-all border ${tab === key
-                ? 'bg-elche-primary text-white border-elche-primary font-bold shadow-md'
-                : 'bg-white text-elche-muted border-gray-200 font-medium'
-                }`}
-            >
-              {TAB_LABEL[key]}
-            </button>
-          ))}
-        </div>
-      </div>
+      {tab === 'personal' && <EventPersonalTab eventId={eventId} />}
 
-      <main className="max-w-[1600px] mx-auto p-4 md:p-8 animate-fade-in">
+      {tab === 'catalogo' && (
+        <EventCatalogTab
+          eventProducts={catalogLogic.eventProducts}
+          allProducts={catalogLogic.allProducts}
+          loading={catalogLogic.loading}
+          setEventProducts={catalogLogic.setEventProducts}
+          onSave={catalogLogic.saveProduct}
+          onDelete={catalogLogic.deleteProduct}
+          onAdd={catalogLogic.addProduct}
+          onCreateGlobal={catalogLogic.createGlobalProduct}
+        />
+      )}
 
-        {tab === 'dashboard' && (
-          <EventDashboardTab eventId={eventId} eventName={eventLogic.eventName} />
-        )}
+      {tab === 'global' && (
+        <EventGlobalTab
+          eventId={eventId}
+          eventName={eventLogic.eventName}
+          products={catalogLogic.eventProducts}
+          cantinas={cantinasLogic.cantinas}
+        />
+      )}
 
-        {tab === 'general' && (
-          <EventGeneralTab
-            eventName={eventLogic.eventName}
-            setEventName={eventLogic.setEventName}
-            eventDate={eventLogic.eventDate}
-            setEventDate={eventLogic.setEventDate}
-            onSave={eventLogic.saveEvent}
-          />
-        )}
-
-        {tab === 'cantinas' && (
-          <EventCantinasHub eventId={eventId} />
-        )}
-
-        {tab === 'personal' && (
-          <>
-            <WaiterAssignmentPanel eventId={eventId} />
-            <WaiterPerformanceTable eventId={eventId} />
-          </>
-        )}
-
-        {tab === 'catalogo' && (
-          <EventCatalogTab
-            eventProducts={catalogLogic.eventProducts}
-            allProducts={catalogLogic.allProducts}
-            loading={catalogLogic.loading}
-            setEventProducts={catalogLogic.setEventProducts}
-            onSave={catalogLogic.saveProduct}
-            onDelete={catalogLogic.deleteProduct}
-            onAdd={catalogLogic.addProduct}
-            onCreateGlobal={catalogLogic.createGlobalProduct}
-          />
-        )}
-
-        {tab === 'global' && (
-          <EventGlobalTab
-            eventId={eventId}
-            eventName={eventLogic.eventName}
-            products={catalogLogic.eventProducts}
-            cantinas={cantinasLogic.cantinas}
-          />
-        )}
-
-      </main>
-    </div>
+      {tab === 'general' && (
+        <EventGeneralTab
+          eventName={eventLogic.eventName}
+          setEventName={eventLogic.setEventName}
+          eventDate={eventLogic.eventDate}
+          setEventDate={eventLogic.setEventDate}
+          onSave={eventLogic.saveEvent}
+        />
+      )}
+    </AdminShell>
   );
 }
