@@ -1,67 +1,88 @@
 'use client';
 
-import { useState } from 'react';
-import { Toaster, toast } from 'react-hot-toast'; // Feedback visual
+import { useMemo, useRef, useState, useEffect } from 'react';
+import { Toaster, toast } from 'react-hot-toast';
 import { createSale, generateUUID, isNetworkError } from '@/lib/sales';
 import { usePosSession } from './hooks/usePosSession';
 import { usePosData } from './hooks/usePosData';
 import { useCart } from './hooks/useCart';
-import { useOfflineSales } from './hooks/useOfflineSales'; // Tu nuevo hook
+import { useOfflineSales } from './hooks/useOfflineSales';
 import { useStripeTerminal } from './hooks/useStripeTerminal';
-import PosHeader from './components/PosHeader';
+import PosShell, { PosTab } from './components/PosShell';
 import PosSalesTab from './components/PosSalesTab';
-import PosInventoryTab from './components/PosInventoryTab';
+import PosStockTab from './components/PosStockTab';
 import PosHistoryTab from './components/PosHistoryTab';
-import PaymentMethodModal from './components/PaymentMethodModal';
+import TicketSheet, { PayMethod, TicketLine } from './components/TicketSheet';
 import IncidentModal from './components/IncidentModal';
 import { reportIncident } from '@/lib/incidents';
 
 export default function PosPage() {
-  // 1. Hooks de Datos y Sesión
+  // 1. Sesión y datos
   const session = usePosSession();
-  const { products, inventory, invMap, totals, refreshInventory, refreshTotals, loading } = usePosData(
+  const { products, inventory, invMap, refreshInventory, refreshTotals, loading } = usePosData(
     session.eventId,
     session.cantinaId,
     session.sessionChecked
   );
 
-  // 2. Hook del Carrito
-  const { cart, addOne, decOne, clearCart, setCartLines, totalEur } = useCart(products);
+  // 2. Carrito
+  const { cart, addOne, decOne, clearCart, setCartLines, totalCents } = useCart(products);
 
-  // 3. Hook Offline (La magia nueva)
+  // 3. Cola offline
   const { queueSale, pendingCount, syncQueue } = useOfflineSales();
 
-  // Stripe Terminal
+  // 4. Stripe Terminal
   const terminal = useStripeTerminal();
 
-  // Estado local para UI
-  const [tab, setTab] = useState<'venta' | 'inventario' | 'ventas'>('venta');
+  // Estado de UI
+  const [tab, setTab] = useState<PosTab>('venta');
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [pay, setPay] = useState<PayMethod>('efectivo');
   const [processing, setProcessing] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
 
-  // Pantalla de carga inicial
+  // Feedback táctil de "añadido" (300 ms sobre la tarjeta pulsada)
+  const [pulseId, setPulseId] = useState<string | null>(null);
+  const pulseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (pulseTimer.current) clearTimeout(pulseTimer.current); }, []);
+
+  const handleAddOne = (id: string) => {
+    addOne(id);
+    setPulseId(id);
+    if (pulseTimer.current) clearTimeout(pulseTimer.current);
+    pulseTimer.current = setTimeout(() => setPulseId(null), 300);
+  };
+
+  // Líneas del ticket, ya resueltas contra el catálogo
+  const ticketLines: TicketLine[] = useMemo(() =>
+    cart.flatMap(l => {
+      const p = products.find(x => x.id === l.productId);
+      if (!p) return [];
+      return [{ productId: l.productId, name: p.name, unitCents: p.price_cents, qty: l.qty }];
+    })
+  , [cart, products]);
+
   if (!session.sessionChecked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="flex min-h-[100dvh] items-center justify-center bg-[var(--c-bg)]">
         <div className="text-center">
-          <div className="text-5xl mb-4 animate-pulse">⏳</div>
-          <div className="text-lg text-slate-600 font-medium">Cargando sistema...</div>
+          <span className="ms animate-spin text-[40px] text-[var(--c-primary)]">progress_activity</span>
+          <div className="mt-3 text-[15px] font-semibold text-[var(--c-text-2)]">Cargando sistema…</div>
         </div>
       </div>
     );
   }
 
-  // Aviso reutilizable de "guardado offline"
   const toastQueued = () =>
     toast('Guardado en el dispositivo', {
       icon: '☁️',
       duration: 3000,
-      style: { border: '1px solid #f59e0b', color: '#b45309' }
+      style: { border: '1px solid #f59e0b', color: '#b45309' },
     });
 
-  // 4. Lógica de Venta Robusta (Online + Offline)
-  const handleSell = async () => {
+  // ---- Cobro en efectivo (online con respaldo offline) ----
+  const sellCash = async () => {
     if (cart.length === 0 || processing) return;
     setProcessing(true);
 
@@ -70,7 +91,7 @@ export default function PosPage() {
       cantinaId: session.cantinaId,
       userId: session.userId,
       waiterId: session.waiterId,
-      lines: cart
+      lines: cart,
     };
     // Clave de idempotencia única: se reutiliza aunque la venta acabe en la cola
     // offline, para que una venta ya confirmada en servidor no se duplique al sincronizar.
@@ -86,17 +107,17 @@ export default function PosPage() {
             salePayload.lines,
             { clientRequestId, waiterId: session.waiterId }
           );
-
           clearCart();
+          setSheetOpen(false);
           toast.success('Venta registrada', { duration: 2000 });
           refreshTotals();
           refreshInventory();
         } catch (error) {
           if (isNetworkError(error)) {
             // Fallo de red: encolamos y seguimos vendiendo
-            console.log('⚠️ Modo offline activado para esta venta');
             await queueSale(salePayload, clientRequestId);
             clearCart();
+            setSheetOpen(false);
             toastQueued();
           } else {
             // Error de negocio (p. ej. stock insuficiente): el servidor la rechazó.
@@ -106,9 +127,9 @@ export default function PosPage() {
           }
         }
       } else {
-        // Sin conexión: directo a la cola
         await queueSale(salePayload, clientRequestId);
         clearCart();
+        setSheetOpen(false);
         toastQueued();
       }
     } finally {
@@ -116,19 +137,12 @@ export default function PosPage() {
     }
   };
 
-  // Abrir modal de selección de método de pago
-  const handleOpenPayment = () => {
-    if (cart.length === 0 || processing) return;
-    setShowPaymentModal(true);
-  };
-
-  // Pago con tarjeta vía Stripe Terminal
-  const handleCardPayment = async () => {
+  // ---- Cobro con tarjeta (Stripe Terminal) ----
+  const sellCard = async () => {
     if (cart.length === 0 || processing) return;
     setProcessing(true);
 
     try {
-      // 1. Initialize terminal if not connected
       if (!terminal.readerConnected) {
         const initialized = await terminal.initialize();
         if (!initialized) {
@@ -138,16 +152,13 @@ export default function PosPage() {
         }
       }
 
-      // 2. Collect payment
-      const amountCents = Math.round(totalEur * 100);
-      const result = await terminal.collectCardPayment(amountCents, {
+      const result = await terminal.collectCardPayment(totalCents, {
         event_id: session.eventId,
         cantina_id: session.cantinaId,
         source: 'stock-cantinas-pos',
       });
 
       if (result.success) {
-        // 3. Register sale in Supabase (same as cash)
         const salePayload = {
           eventId: session.eventId,
           cantinaId: session.cantinaId,
@@ -178,9 +189,6 @@ export default function PosPage() {
         }
 
         toast.success('Pago con tarjeta registrado', { duration: 2000 });
-
-        // Auto-close modal after success
-        setTimeout(() => setShowPaymentModal(false), 1500);
       } else {
         toast.error(result.error || 'Error en el pago', { duration: 3000 });
       }
@@ -192,11 +200,7 @@ export default function PosPage() {
     }
   };
 
-  // Pago en efectivo (cierra modal y ejecuta flujo original)
-  const handleCashPayment = () => {
-    setShowPaymentModal(false);
-    handleSell();
-  };
+  const handleConfirm = () => (pay === 'tarjeta' ? sellCard() : sellCash());
 
   // Reportar incidencia (online-only: es un aviso, no una transacción)
   const handleReportIncident = async (input: { type: any; productIds: string[]; description: string }) => {
@@ -220,113 +224,90 @@ export default function PosPage() {
     }
   };
 
+  const refreshAll = () => {
+    refreshInventory();
+    refreshTotals();
+    if (pendingCount > 0) syncQueue();
+  };
+
   return (
-    <main className="min-h-screen bg-slate-50 pb-20 md:pb-0">
+    <PosShell
+      cantinaName={session.cantinaName}
+      eventName={session.eventName}
+      waiterName={session.waiterName}
+      tab={tab}
+      onTabChange={setTab}
+      onReportIncident={() => setShowIncidentModal(true)}
+      pendingUploads={pendingCount}
+      onSync={syncQueue}
+      onRefresh={refreshAll}
+      onLogout={session.logout}
+      drawerOpen={drawerOpen}
+      onDrawerOpenChange={setDrawerOpen}
+    >
       <Toaster position="top-center" />
 
-      {/* Modal de selección de método de pago */}
-      <PaymentMethodModal
-        visible={showPaymentModal}
-        totalEur={totalEur}
+      {tab === 'venta' && (
+        <PosSalesTab
+          products={products}
+          invMap={invMap}
+          cart={cart}
+          totalCents={totalCents}
+          pulseId={pulseId}
+          onAddOne={handleAddOne}
+          onClear={clearCart}
+          onOpenTicket={() => setSheetOpen(true)}
+          loading={loading}
+        />
+      )}
+
+      {tab === 'stock' && (
+        <PosStockTab
+          eventId={session.eventId}
+          cantinaId={session.cantinaId}
+          userId={session.userId}
+          inventory={inventory}
+          products={products}
+          onRefresh={refreshInventory}
+        />
+      )}
+
+      {tab === 'historial' && (
+        <PosHistoryTab
+          eventId={session.eventId}
+          cantinaId={session.cantinaId}
+          waiterId={session.waiterId}
+          products={products}
+          sessionChecked={session.sessionChecked}
+          active={tab === 'historial'}
+          onModify={(lines) => { setCartLines(lines); setTab('venta'); }}
+          onAfterVoid={() => { refreshInventory(); refreshTotals(); }}
+        />
+      )}
+
+      {/* Ticket + cobro */}
+      <TicketSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        lines={ticketLines}
+        totalCents={totalCents}
+        pay={pay}
+        onPayChange={setPay}
+        onInc={addOne}
+        onDec={decOne}
+        onConfirm={handleConfirm}
+        processing={processing}
         terminalStatus={terminal.status}
         terminalError={terminal.error}
         readerConnected={terminal.readerConnected}
-        onPayCash={handleCashPayment}
-        onPayCard={handleCardPayment}
-        onClose={() => setShowPaymentModal(false)}
       />
 
-      {/* HEADER: Ahora recibe pendingUploads y onManualSync */}
-      <PosHeader
-        eventName={session.eventName}
-        cantinaName={session.cantinaName}
-        waiterName={session.waiterName}
-        onLogout={session.logout}
-        pendingUploads={pendingCount}
-        onManualSync={syncQueue}
-        onReportIncident={() => setShowIncidentModal(true)}
-      />
-
-      {/* Modal de reporte de incidencia */}
       <IncidentModal
         visible={showIncidentModal}
         products={products}
         onClose={() => setShowIncidentModal(false)}
         onSubmit={handleReportIncident}
       />
-
-      {/* PESTAÑAS DE NAVEGACIÓN (Solo visible en móvil normalmente, o integrado en header) */}
-      <div className="max-w-7xl mx-auto p-2 flex gap-2 justify-center md:justify-start">
-        <button
-          onClick={() => setTab('venta')}
-          className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${tab === 'venta' ? 'bg-elche-primary text-white shadow-md' : 'bg-elche-gray text-elche-primary hover:bg-elche-primary/10'}`}
-        >
-          💰 Venta
-        </button>
-        <button
-          onClick={() => setTab('inventario')}
-          className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${tab === 'inventario' ? 'bg-elche-primary text-white shadow-md' : 'bg-elche-gray text-elche-primary hover:bg-elche-primary/10'}`}
-        >
-          📦 Stock
-        </button>
-        <button
-          onClick={() => setTab('ventas')}
-          className={`px-4 py-2 rounded-full text-sm font-bold transition-colors ${tab === 'ventas' ? 'bg-elche-primary text-white shadow-md' : 'bg-elche-gray text-elche-primary hover:bg-elche-primary/10'}`}
-        >
-          📝 Historial
-        </button>
-      </div>
-
-      <div className="max-w-7xl mx-auto p-4">
-        {loading && tab === 'venta' ? (
-          <div className="text-center py-20 text-slate-500">Cargando catálogo...</div>
-        ) : (
-          <>
-            {/* PESTAÑA: VENTA (TPV) */}
-            <div className={tab === 'venta' ? 'block' : 'hidden'}>
-              <PosSalesTab
-                products={products}
-                invMap={invMap}
-                cart={cart}
-                totalEur={totalEur}
-                onAddOne={addOne}
-                onDecOne={decOne}
-                onClear={clearCart}
-                onOpenPayment={handleOpenPayment}
-              />
-            </div>
-
-            {/* PESTAÑA: INVENTARIO */}
-            <div className={tab === 'inventario' ? 'block' : 'hidden'}>
-              <PosInventoryTab
-                // Añadimos las 3 IDs que faltaban (vienen de tu objeto 'session')
-                eventId={session.eventId}
-                cantinaId={session.cantinaId}
-                userId={session.userId}
-                // Datos existentes
-                inventory={inventory}
-                products={products}
-                // Corregimos el nombre: de 'refresh' a 'onRefresh'
-                onRefresh={refreshInventory}
-              />
-            </div>
-
-            {/* PESTAÑA: HISTORIAL */}
-            <div className={tab === 'ventas' ? 'block' : 'hidden'}>
-              <PosHistoryTab
-                eventId={session.eventId}
-                cantinaId={session.cantinaId}
-                waiterId={session.waiterId}
-                products={products}
-                sessionChecked={session.sessionChecked}
-                active={tab === 'ventas'}
-                onModify={(lines) => { setCartLines(lines); setTab('venta'); }}
-                onAfterVoid={() => { refreshInventory(); refreshTotals(); }}
-              />
-            </div>
-          </>
-        )}
-      </div>
-    </main>
+    </PosShell>
   );
 }

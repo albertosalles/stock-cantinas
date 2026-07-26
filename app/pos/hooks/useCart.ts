@@ -38,14 +38,18 @@ export function useCart(products: Product[]) {
   // Reemplaza el carrito completo (usado al "modificar" una venta: anular + rehacer)
   const setCartLines = (lines: CartItem[]) => setCart(lines);
 
-  const totalEur = useMemo(() =>
+  // El total se acumula en céntimos (entero) para evitar errores de coma flotante;
+  // totalEur se deriva de él para los consumidores que trabajan en euros.
+  const totalCents = useMemo(() =>
     cart.reduce((sum, line) => {
       const p = products.find(x => x.id === line.productId);
-      return sum + (p ? (p.price_cents / 100) * line.qty : 0);
+      return sum + (p ? p.price_cents * line.qty : 0);
     }, 0)
   , [cart, products]);
 
-  const totalItems = useMemo(() => 
+  const totalEur = totalCents / 100;
+
+  const totalItems = useMemo(() =>
     cart.reduce((sum, line) => sum + line.qty, 0)
   , [cart]);
 
@@ -55,6 +59,7 @@ export function useCart(products: Product[]) {
     decOne,
     clearCart,
     setCartLines,
+    totalCents,
     totalEur,
     totalItems
   };

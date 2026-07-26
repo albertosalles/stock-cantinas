@@ -1,8 +1,11 @@
+'use client';
+
 import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { usePosHistory, Sale } from '../hooks/usePosHistory';
 import { Product } from '../hooks/usePosData';
 import { voidSale } from '@/lib/sales';
+import { eurFromCents } from '@/lib/posUi';
 
 interface PosHistoryTabProps {
   eventId: string;
@@ -18,23 +21,27 @@ interface PosHistoryTabProps {
   onAfterVoid?: () => void;
 }
 
-export default function PosHistoryTab({ eventId, cantinaId, waiterId, products, sessionChecked, active, onModify, onAfterVoid }: PosHistoryTabProps) {
-  const { sales, currentPage, totalSales, loading, fetchSales, SALES_PER_PAGE } = usePosHistory(eventId, cantinaId, sessionChecked);
+const MOTIVOS = ['Error de cobro', 'Producto equivocado', 'Cliente se arrepiente', 'Cantidad incorrecta'];
 
-  // Refresca el historial cada vez que se entra en la pestaña (para ver ventas recién hechas)
+export default function PosHistoryTab({
+  eventId, cantinaId, waiterId, products, sessionChecked, active, onModify, onAfterVoid,
+}: PosHistoryTabProps) {
+  const { sales, currentPage, totalSales, loading, fetchSales, SALES_PER_PAGE } =
+    usePosHistory(eventId, cantinaId, sessionChecked);
+
+  // Refresca al entrar en la pestaña (para ver ventas recién hechas)
   const wasActive = useRef(false);
   useEffect(() => {
     if (active && !wasActive.current) fetchSales(currentPage);
     wasActive.current = active;
   }, [active, fetchSales, currentPage]);
-  const [expandedSaleId, setExpandedSaleId] = useState<string | null>(null);
 
-  // Modal de anulación (motivo obligatorio)
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [voidTarget, setVoidTarget] = useState<Sale | null>(null);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const MOTIVOS = ['Error de cobro', 'Producto equivocado', 'Cliente se arrepiente', 'Cantidad incorrecta'];
+  const totalPages = Math.max(1, Math.ceil(totalSales / SALES_PER_PAGE));
 
   const confirmVoid = async () => {
     if (!voidTarget || !reason.trim() || busy) return;
@@ -71,175 +78,193 @@ export default function PosHistoryTab({ eventId, cantinaId, waiterId, products, 
   };
 
   return (
-    <div className="bg-white p-5 rounded-2xl shadow-[0_2px_12px_rgba(0,150,79,0.08)] border border-elche-gray/50">
-      <div className="flex justify-between items-center mb-4 pb-4 border-b-2 border-elche-gray/50">
-        <div className="font-bold text-lg text-elche-text flex items-center gap-2">
-          <span className="text-xl">🧾</span> Historial de ventas
-        </div>
-        <div className="text-elche-text-light text-sm font-medium bg-elche-gray/20 px-3 py-1 rounded-full">
-          {sales.length} / {totalSales}
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Cabecera */}
+      <div className="flex flex-none items-center justify-between px-4 pb-2 pt-3.5">
+        <h2 className="m-0 text-base font-extrabold tracking-[-0.01em] text-[var(--c-text)]">
+          Historial de ventas
+        </h2>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-[var(--c-primary-tint)] px-2.5 py-1 text-[11.5px] font-bold text-[var(--c-primary)]">
+            {totalSales} {totalSales === 1 ? 'ticket' : 'tickets'}
+          </span>
+          <button
+            onClick={() => fetchSales(currentPage)}
+            title="Recargar"
+            aria-label="Recargar historial"
+            className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--c-border)] bg-[var(--c-surface)] text-[var(--c-text-2)] transition-colors active:text-[var(--c-primary)]"
+          >
+            <span className={`ms text-lg ${loading ? 'animate-spin' : ''}`}>refresh</span>
+          </button>
         </div>
       </div>
 
-      <div className="flex justify-end mb-3">
-         <button
-           onClick={() => fetchSales(currentPage)}
-           className="text-xs font-bold text-elche-primary hover:underline flex items-center gap-1 transition-colors">
-           🔄 Recargar
-         </button>
-      </div>
+      {/* Lista */}
+      <div className="noscroll animate-fade-in flex-1 overflow-y-auto px-4 pb-6 pt-1">
+        {loading && sales.length === 0 ? (
+          <div className="py-16 text-center">
+            <span className="ms animate-spin text-[32px] text-[var(--c-primary)]">progress_activity</span>
+            <div className="mt-2 text-[13px] font-semibold text-[var(--c-text-muted)]">Cargando ventas…</div>
+          </div>
+        ) : sales.length === 0 ? (
+          <div className="py-16 text-center">
+            <span className="ms text-[40px] text-[#bfe3cf]">receipt_long</span>
+            <div className="mt-2 text-[12.5px] font-bold text-[var(--c-text-2)]">Sin ventas todavía</div>
+            <div className="mt-0.5 text-[11px] font-semibold text-[var(--c-text-muted)]">
+              Los tickets aparecerán aquí a medida que cobres
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {sales.map(sale => {
+              const time = new Date(sale.created_at).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+              const voided = sale.status === 'CANCELED';
+              const open = expandedId === sale.id;
+              return (
+                <div
+                  key={sale.id}
+                  className={`overflow-hidden rounded-[14px] border bg-[var(--c-surface)] ${
+                    voided ? 'border-[var(--c-crit-bd)]' : open ? 'border-[var(--c-primary)]' : 'border-[var(--c-border)]'
+                  }`}
+                >
+                  {/* Fila principal */}
+                  <button
+                    onClick={() => setExpandedId(open ? null : sale.id)}
+                    className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors active:bg-[#fafcfb]"
+                  >
+                    <span
+                      className={`flex h-10 w-10 flex-none items-center justify-center rounded-[11px] ${
+                        voided ? 'bg-[var(--c-crit-bg)] text-[var(--c-crit)]' : 'bg-[var(--c-primary-tint)] text-[var(--c-primary)]'
+                      }`}
+                    >
+                      <span className="ms text-[21px]">{voided ? 'block' : 'shopping_bag'}</span>
+                    </span>
 
-      {loading ? (
-        <div className="text-center py-12 text-elche-text-light flex flex-col items-center gap-2">
-          <div className="w-6 h-6 border-2 border-elche-primary border-t-transparent rounded-full animate-spin"></div>
-          Cargando ventas...
-        </div>
-      ) : sales.length === 0 ? (
-        <div className="text-center py-12 text-elche-text-light italic bg-elche-gray/10 rounded-2xl border border-dashed border-elche-gray">
-          No hay ventas registradas aún
-        </div>
-      ) : (
-        <div className="grid gap-3">
-          {sales.map((sale) => {
-            const date = new Date(sale.created_at);
-            const timeStr = date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-            const dateStr = date.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-sm font-extrabold ${voided ? 'text-[var(--c-text-faint)] line-through' : 'text-[var(--c-text)]'}`}>
+                        {eurFromCents(sale.total_cents)}
+                      </div>
+                      <div className="mt-px flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--c-text-muted)]">
+                        {sale.total_items} {sale.total_items === 1 ? 'artículo' : 'artículos'}
+                        {voided && <span className="font-bold text-[var(--c-crit)]">· ANULADA</span>}
+                      </div>
+                    </div>
 
-            const isExpanded = expandedSaleId === sale.id;
-            const isVoided = sale.status === 'CANCELED';
+                    <div className="flex flex-none items-center gap-1.5">
+                      <span className="text-xs font-bold text-[var(--c-text-faint)]">{time}</span>
+                      <span className="ms text-lg text-[var(--c-text-muted)]">{open ? 'expand_less' : 'expand_more'}</span>
+                    </div>
+                  </button>
 
-            return (
-              <div key={sale.id} className={`p-4 rounded-2xl border transition-all duration-200 ${
-                isVoided
-                  ? 'bg-elche-danger/5 border-elche-danger/30'
-                  : isExpanded ? 'border-elche-primary shadow-md bg-white' : 'bg-elche-gray/20 border-elche-gray/50 hover:border-elche-green/30 hover:bg-white'}`}>
-                <div className="grid grid-cols-[1fr_auto_auto] gap-4 items-center mb-0 cursor-pointer" onClick={() => setExpandedSaleId(isExpanded ? null : sale.id)}>
-                  <div>
-                    <div className="text-xs text-elche-text-light mb-1 font-bold uppercase tracking-wide flex gap-2 items-center flex-wrap">
-                      <span>{dateStr}</span>
-                      <span className="opacity-50">|</span>
-                      <span>{timeStr}</span>
-                      {isVoided && (
-                        <span className="bg-elche-danger/10 text-elche-danger border border-elche-danger/20 px-2 py-0.5 rounded-full text-[10px]">
-                          🚫 ANULADA
-                        </span>
+                  {/* Detalle */}
+                  {open && (
+                    <div className="animate-fade-in border-t border-[var(--c-divider)] bg-[#fbfdfc] px-3.5 pb-3.5 pt-3">
+                      <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--c-text-muted)]">
+                        Productos
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        {sale.sale_lines.map((line, idx) => {
+                          const p = products.find(x => x.id === line.product_id);
+                          return (
+                            <div key={idx} className="flex items-center justify-between gap-3 text-[12.5px]">
+                              <span className="flex min-w-0 items-center gap-2 text-[var(--c-text)]">
+                                <span className="shrink-0 rounded-md border border-[var(--c-border-input)] bg-white px-1.5 py-0.5 text-[11px] font-bold text-[var(--c-text-muted)]">
+                                  {line.qty}×
+                                </span>
+                                <span className="truncate font-medium">{p?.name ?? 'Producto desconocido'}</span>
+                              </span>
+                              <span className="shrink-0 font-bold text-[var(--c-text-2)]">
+                                {eurFromCents(line.price_cents * line.qty)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {voided && sale.void_reason && (
+                        <div className="mt-2.5 text-[11.5px] font-semibold text-[var(--c-crit)]">
+                          Motivo: {sale.void_reason}
+                        </div>
+                      )}
+
+                      {!voided && (
+                        <div className="mt-3.5 flex gap-2">
+                          <button
+                            onClick={() => handleModify(sale)}
+                            disabled={busy}
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-[11px] border border-[var(--c-border-input)] bg-[var(--c-surface)] py-2.5 text-[12.5px] font-bold text-[var(--c-text-2)] transition-colors active:border-[var(--c-primary)] active:text-[var(--c-primary)] disabled:opacity-50"
+                          >
+                            <span className="ms text-[17px]">edit</span>
+                            Modificar
+                          </button>
+                          <button
+                            onClick={() => { setVoidTarget(sale); setReason(''); }}
+                            disabled={busy}
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-[11px] border border-[var(--c-crit-bd)] bg-[var(--c-crit-bg)] py-2.5 text-[12.5px] font-bold text-[var(--c-crit)] transition-colors active:bg-[var(--c-crit)] active:text-white disabled:opacity-50"
+                          >
+                            <span className="ms text-[17px]">block</span>
+                            Anular
+                          </button>
+                        </div>
                       )}
                     </div>
-                    <div className="text-[10px] text-elche-text-light font-mono bg-white px-2 py-0.5 rounded border border-elche-gray/30 w-fit">
-                      ID: {sale.id.substring(0, 8)}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-elche-text-light mb-0.5 font-medium">
-                      {sale.total_items} art.
-                    </div>
-                    <div className={`text-xl font-bold ${isVoided ? 'text-elche-text-light line-through' : 'text-elche-green'}`}>
-                      {(sale.total_cents / 100).toFixed(2)} €
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setExpandedSaleId(isExpanded ? null : sale.id); }}
-                    className={`px-4 py-2 rounded-xl border font-semibold text-xs shadow-sm transition-all ${
-                      isExpanded
-                      ? 'bg-elche-primary text-white border-elche-primary active:scale-95'
-                      : 'bg-white border-elche-gray/50 text-elche-text hover:bg-elche-gray/20'
-                    }`}>
-                    {isExpanded ? 'Ocultar' : 'Ver'}
-                  </button>
+                  )}
                 </div>
-
-                {/* Motivo si está anulada */}
-                {isVoided && sale.void_reason && (
-                  <div className="mt-2 text-xs text-elche-danger font-medium">
-                    Motivo: {sale.void_reason}
-                  </div>
-                )}
-
-                {/* Detalle */}
-                {isExpanded && (
-                  <div className="mt-4 pt-4 border-t border-elche-gray/30 animate-in slide-in-from-top-2 duration-200">
-                    <div className="text-xs font-bold text-elche-text mb-2 uppercase tracking-wide opacity-70">
-                      Productos vendidos
-                    </div>
-                    <div className="grid gap-2">
-                      {sale.sale_lines.map((line, idx) => {
-                        const product = products.find(p => p.id === line.product_id);
-                        return (
-                          <div key={idx} className="flex justify-between p-3 bg-elche-gray/10 rounded-xl text-sm border border-elche-gray/20">
-                            <div className="text-elche-text font-medium flex items-center">
-                              <span className="bg-white border border-elche-gray/30 px-2 py-0.5 rounded-md text-elche-text-light mr-3 font-bold shadow-sm text-xs">{line.qty}x</span>
-                              {product?.name ?? 'Desconocido'}
-                            </div>
-                            <div className="text-elche-green font-bold">
-                              {((line.price_cents * line.qty) / 100).toFixed(2)} €
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Acciones: solo en ventas no anuladas */}
-                    {!isVoided && (
-                      <div className="flex gap-2 mt-4">
-                        <button
-                          onClick={() => handleModify(sale)}
-                          disabled={busy}
-                          className="flex-1 py-2.5 rounded-xl bg-white border border-elche-gray text-elche-text font-bold text-sm hover:border-elche-primary hover:text-elche-primary transition-colors disabled:opacity-50">
-                          ✏️ Modificar
-                        </button>
-                        <button
-                          onClick={() => { setVoidTarget(sale); setReason(''); }}
-                          disabled={busy}
-                          className="flex-1 py-2.5 rounded-xl bg-elche-danger/10 border border-elche-danger/30 text-elche-danger font-bold text-sm hover:bg-elche-danger hover:text-white transition-colors disabled:opacity-50">
-                          🚫 Anular
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Paginación */}
-      {totalSales > SALES_PER_PAGE && (
-        <div className="flex justify-center items-center gap-3 mt-6 pt-6 border-t-2 border-elche-gray/50">
-          <button
-            onClick={() => fetchSales(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="px-4 py-2 rounded-xl font-semibold border transition-colors bg-white border-elche-gray text-elche-text hover:bg-elche-gray/10 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95">
-            ← Anterior
-          </button>
-          <div className="text-elche-text font-bold text-sm bg-elche-gray/20 px-4 py-1.5 rounded-full">
-             {currentPage} / {Math.ceil(totalSales / SALES_PER_PAGE)}
+              );
+            })}
           </div>
-          <button
-            onClick={() => fetchSales(currentPage + 1)}
-            disabled={currentPage >= Math.ceil(totalSales / SALES_PER_PAGE)}
-            className="px-4 py-2 rounded-xl font-semibold border transition-colors bg-white border-elche-gray text-elche-text hover:bg-elche-gray/10 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95">
-            Siguiente →
-          </button>
-        </div>
-      )}
+        )}
+
+        {/* Paginación */}
+        {totalSales > SALES_PER_PAGE && (
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <button
+              onClick={() => fetchSales(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--c-border)] bg-[var(--c-surface)] text-[var(--c-text-2)] transition-colors active:text-[var(--c-primary)] disabled:opacity-40"
+            >
+              <span className="ms text-lg">chevron_left</span>
+            </button>
+            <span className="rounded-full bg-[var(--c-surface-alt)] px-3.5 py-1.5 text-[12.5px] font-bold text-[var(--c-text)]">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => fetchSales(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              className="flex h-9 w-9 items-center justify-center rounded-[10px] border border-[var(--c-border)] bg-[var(--c-surface)] text-[var(--c-text-2)] transition-colors active:text-[var(--c-primary)] disabled:opacity-40"
+            >
+              <span className="ms text-lg">chevron_right</span>
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Modal de anulación con motivo obligatorio */}
       {voidTarget && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => !busy && setVoidTarget(null)}>
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="font-bold text-lg text-elche-text mb-1">Anular venta</div>
-            <div className="text-xs text-elche-text-light mb-4">
+        <div
+          className="animate-overlay absolute inset-0 z-50 flex items-end justify-center bg-[rgba(10,30,20,.45)] p-4"
+          onClick={() => !busy && setVoidTarget(null)}
+        >
+          <div
+            className="animate-sheetup w-full max-w-sm rounded-[22px] bg-[var(--c-surface)] p-5 shadow-[0_-12px_40px_rgba(10,30,20,.25)]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="text-lg font-extrabold tracking-[-0.01em] text-[var(--c-text)]">Anular venta</div>
+            <div className="mb-4 mt-1 text-xs font-semibold text-[var(--c-text-muted)]">
               Se restaurará el stock de {voidTarget.total_items} artículo(s). Indica el motivo:
             </div>
 
-            <div className="flex flex-wrap gap-2 mb-3">
+            <div className="mb-3 flex flex-wrap gap-2">
               {MOTIVOS.map(m => (
                 <button
                   key={m}
                   onClick={() => setReason(m)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-                    reason === m ? 'bg-elche-primary text-white border-elche-primary' : 'bg-white border-elche-gray text-elche-text hover:border-elche-primary'}`}>
+                  className={`rounded-full px-3 py-1.5 text-[11.5px] font-bold transition-colors ${
+                    reason === m
+                      ? 'border border-[var(--c-primary)] bg-[var(--c-primary)] text-white'
+                      : 'border border-[var(--c-border-input)] bg-[var(--c-surface)] text-[var(--c-text-2)]'
+                  }`}
+                >
                   {m}
                 </button>
               ))}
@@ -249,22 +274,24 @@ export default function PosHistoryTab({ eventId, cantinaId, waiterId, products, 
               value={reason}
               onChange={e => setReason(e.target.value)}
               placeholder="Motivo de la anulación *"
-              className="w-full p-3 rounded-xl border border-elche-gray focus:ring-2 focus:ring-elche-danger focus:outline-none mb-4"
               autoFocus
+              className="mb-4 w-full rounded-[11px] border border-[var(--c-border-input)] bg-[var(--c-surface-sub)] px-3 py-3 text-sm text-[var(--c-text)] outline-none focus:border-[var(--c-crit)]"
             />
 
             <div className="flex gap-2">
               <button
                 onClick={() => setVoidTarget(null)}
                 disabled={busy}
-                className="flex-1 py-3 rounded-xl bg-white border border-elche-gray text-elche-text font-bold hover:bg-elche-gray/20 transition-colors disabled:opacity-50">
+                className="flex-1 rounded-[12px] border border-[var(--c-border)] bg-[var(--c-surface)] py-3 text-sm font-bold text-[var(--c-text)] transition-colors active:bg-[var(--c-bg)] disabled:opacity-50"
+              >
                 Cancelar
               </button>
               <button
                 onClick={confirmVoid}
                 disabled={busy || !reason.trim()}
-                className="flex-1 py-3 rounded-xl bg-elche-danger text-white font-bold hover:bg-red-600 transition-colors disabled:opacity-50">
-                {busy ? '⏳ Anulando...' : 'Anular venta'}
+                className="flex-1 rounded-[12px] bg-[var(--c-crit)] py-3 text-sm font-bold text-white transition-colors active:brightness-95 disabled:opacity-50"
+              >
+                {busy ? 'Anulando…' : 'Anular venta'}
               </button>
             </div>
           </div>

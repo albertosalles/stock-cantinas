@@ -1,47 +1,74 @@
+'use client';
+
 import React from 'react';
 import { Product, InventoryRow } from '../hooks/usePosData';
+import { posStockState, POS_DOT_VAR, eurFromCents } from '@/lib/posUi';
 
 interface ProductCardProps {
   product: Product;
   inventory?: InventoryRow;
+  /** Unidades ya añadidas al ticket: pinta el badge flotante. */
+  cartQty: number;
+  /** true mientras dura el feedback táctil de "añadido" (300 ms). */
+  pulsing: boolean;
   onAdd: () => void;
 }
 
-export default function ProductCard({ product, inventory, onAdd }: ProductCardProps) {
+/**
+ * Tarjeta de producto de la vista Venta (design.md §7, fila "Tarjeta producto (POS)").
+ * Reposo → borde --c-border · pulsado → scale(.97) · agotado → opacity .55 sin tap.
+ *
+ * Nota: §7 pide `contain:content` por tarjeta para listas largas, pero la
+ * contención de pintado recortaría el badge de cantidad (sobresale -7px).
+ * Se usa `contain:layout style`, que mantiene el aislamiento sin recortar.
+ */
+export default function ProductCard({ product, inventory, cartQty, pulsing, onAdd }: ProductCardProps) {
   const qty = inventory?.current_qty ?? 0;
-  const low = inventory?.low_stock_threshold ?? 0;
-  const status: 'ok' | 'bajo' | 'agotado' = qty <= 0 ? 'agotado' : qty <= low ? 'bajo' : 'ok';
+  const threshold = inventory?.low_stock_threshold ?? 0;
+  const state = posStockState(qty, threshold);
+  const soldOut = state === 'agotado';
 
-  const dotColor = status === 'ok' ? 'bg-elche-success' : status === 'bajo' ? 'bg-elche-warning' : 'bg-elche-danger';
-  const borderColor = status === 'ok' ? 'hover:border-elche-success' : status === 'bajo' ? 'hover:border-elche-warning' : 'hover:border-elche-danger';
   const handlePress = () => {
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate(50);
-    }
+    if (soldOut) return;
+    // Feedback háptico inmediato: en barra el camarero no mira la pantalla
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(35);
     onAdd();
   };
 
   return (
     <button
-      onClick={() => qty > 0 && handlePress()}
-      disabled={qty <= 0}
-      className={`
-        bg-elche-surface p-3 md:p-5 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] border border-transparent transition-all duration-200 ease-out text-left relative overflow-hidden flex flex-col justify-between min-h-[120px] w-full group
-        ${qty <= 0
-          ? 'opacity-60 cursor-not-allowed grayscale-[0.5]'
-          : `${borderColor} hover:shadow-[0_4px_12px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 active:scale-[0.98]`
-        }
-      `}>
-      <div>
-        <div className="text-base md:text-lg font-bold text-elche-text mb-1 leading-tight group-hover:text-elche-primary transition-colors">{product.name}</div>
-        <div className="text-lg md:text-xl font-bold text-elche-primary mb-2">
-          {(product.price_cents / 100).toFixed(2)} €
-        </div>
+      onClick={handlePress}
+      disabled={soldOut}
+      aria-label={`${product.name}, ${eurFromCents(product.price_cents)}, stock ${qty}`}
+      className={`relative flex min-h-[118px] flex-col justify-between rounded-[15px] border border-[var(--c-border)] bg-[var(--c-surface)] px-3 pb-[11px] pt-3 text-left transition-shadow duration-150 [contain:layout_style] ${
+        soldOut
+          ? 'cursor-not-allowed opacity-55'
+          : 'cursor-pointer active:scale-[0.97] active:shadow-[0_2px_6px_rgba(16,40,26,.12)] active:duration-100'
+      } ${pulsing ? 'animate-cardtap' : ''}`}
+    >
+      {cartQty > 0 && (
+        <span className="animate-pop absolute -right-[7px] -top-[7px] flex h-6 min-w-[24px] items-center justify-center rounded-[13px] border-2 border-white bg-[var(--c-primary)] px-1.5 text-[12.5px] font-extrabold text-white shadow-[0_3px_8px_rgba(0,150,79,.4)]">
+          {cartQty}
+        </span>
+      )}
+
+      <div className="text-[15px] font-extrabold leading-[1.25] tracking-[-0.01em] text-[var(--c-text)] [text-wrap:pretty]">
+        {product.name}
       </div>
 
-      <div className="flex items-center gap-2 text-xs md:text-sm mt-auto">
-        <span className={`w-2.5 h-2.5 rounded-full ${dotColor} shrink-0 shadow-sm`} />
-        <span className="text-elche-muted font-medium">Stock: {qty}</span>
+      <div>
+        <div className="mt-2 text-[17px] font-extrabold tracking-[-0.01em] text-[var(--c-primary)]">
+          {eurFromCents(product.price_cents)}
+        </div>
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <span
+            className="h-2 w-2 flex-none rounded-full"
+            style={{ background: POS_DOT_VAR[state] }}
+          />
+          <span className="text-[11.5px] font-semibold text-[var(--c-text-muted)]">
+            {soldOut ? 'Agotado' : `Stock: ${qty}`}
+          </span>
+        </div>
       </div>
     </button>
   );
