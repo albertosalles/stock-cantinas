@@ -1,60 +1,65 @@
 -- ============================================================================
--- Funciones y triggers del camino crítico, copiados literalmente de producción
--- (2026-07-26). NO editar para "mejorar" nada: el banco mide el código real.
+-- Materialización del stock actual y retirada del advisory lock por cantina
 --
--- Cuando la épica de materialización del stock reescriba create_sale, este
--- fichero debe actualizarse en el mismo commit, y la medición de después
--- compararse contra la de antes.
+-- ADR: «Materializar el stock actual en tabla mantenida por trigger»
+-- Informes: INF-1 (límites 2 y 3), INF-2 (medición: factor 8,2× por el lock)
 --
--- Se omite SECURITY DEFINER: en local sólo hay un rol y no cambia el coste.
+-- PRINCIPIO: `stock_movements` sigue siendo la ÚNICA fuente de verdad.
+-- `cantina_stock` es una proyección derivada y reconstruible, mantenida por el
+-- MOTOR dentro de la misma transacción — nunca por la aplicación. Esa es la
+-- diferencia con el antipatrón del monedero de FestiApp, que materializa el
+-- saldo desde el código y sufre descuadres.
+--
+-- DESPLIEGUE: sin evento en curso. El backfill recorre todo el histórico.
+--
+-- DEBE EJECUTARSE DENTRO DE UNA TRANSACCIÓN (por el LOCK TABLE del paso 0):
+--   psql --single-transaction -f este_fichero.sql
+-- El `apply_migration` de Supabase ya envuelve la migración en una transacción,
+-- así que allí no hay que hacer nada. Si se ejecuta sentencia a sentencia, el
+-- paso 0 falla con «LOCK TABLE can only be used in transaction blocks».
+--
+-- Tras aplicar, comprobar SIEMPRE: select count(*) from verify_cantina_stock();
+-- Debe devolver 0. Si no, ejecutar select rebuild_cantina_stock();
 -- ============================================================================
 
-create or replace function public.assign_active_season()
- returns trigger
- language plpgsql
-as $function$
-begin
-  if new.season_id is null then
-    select id into new.season_id from seasons where active = true;
-    if new.season_id is null then
-      raise exception 'No hay ninguna temporada activa: crea o activa una temporada antes de crear eventos';
-    end if;
-  end if;
-  return new;
-end $function$;
+-- ─────────────────────── 0. Cerrojo de migración ───────────────────────
+-- Sin esto hay una carrera real: si un movimiento se confirma entre el momento
+-- en que el backfill toma su instantánea y el momento en que el trigger empieza
+-- a aplicarse, su efecto se pierde (el backfill sobrescribe con una suma que no
+-- lo incluía). Bloquear las escrituras de la tabla durante la migración lo evita.
+-- Es un bloqueo de segundos; aun así, desplegar sin evento en curso.
 
-create or replace function public.close_event_shifts()
- returns trigger
- language plpgsql
-as $function$
-begin
-  if new.status = 'closed' and old.status is distinct from 'closed' then
-    update shifts
-       set ended_at = now(),
-           hours = round(extract(epoch from (now() - started_at))::numeric / 3600, 2)
-     where event_id = new.id and ended_at is null;
-  end if;
-  return new;
-end $function$;
+lock table public.stock_movements in share row exclusive mode;
 
-create trigger trg_events_active_season before insert on public.events
-  for each row execute function public.assign_active_season();
-create trigger trg_close_event_shifts after update of status on public.events
-  for each row execute function public.close_event_shifts();
+-- ─────────────────────── 1. Proyección ───────────────────────
 
--- ─────────── Único escritor de la proyección de stock ───────────
--- Se ejecuta en la misma transacción que la inserción del movimiento, de modo
--- que cantina_stock no puede divergir del ledger por un fallo de la aplicación.
+create table if not exists public.cantina_stock (
+  event_id   uuid not null references public.events(id)   on delete cascade,
+  cantina_id uuid not null references public.cantinas(id) on delete cascade,
+  product_id uuid not null references public.products(id),
+  qty        integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (event_id, cantina_id, product_id)
+);
+
+comment on table public.cantina_stock is
+  'Proyección del stock actual, derivada de stock_movements y mantenida por trigger. '
+  'NO es fuente de verdad: reconstruible en cualquier momento desde el ledger. '
+  'Verificable con verify_cantina_stock().';
+
+-- ─────────────────────── 2. Único escritor: el trigger ───────────────────────
+-- Se ejecuta en la misma transacción que la inserción del movimiento, así que
+-- la proyección no puede divergir por un fallo de la aplicación.
 
 create or replace function public.apply_stock_movement() returns trigger
-language plpgsql as $function$
+language plpgsql as $$
 begin
   insert into public.cantina_stock (event_id, cantina_id, product_id, qty)
   values (new.event_id, new.cantina_id, new.product_id, new.qty)
   on conflict (event_id, cantina_id, product_id)
   do update set qty = public.cantina_stock.qty + excluded.qty, updated_at = now();
   return null;
-end $function$;
+end $$;
 
 drop trigger if exists trg_apply_stock_movement on public.stock_movements;
 create trigger trg_apply_stock_movement
@@ -63,10 +68,22 @@ create trigger trg_apply_stock_movement
   when (new.event_id is not null and new.cantina_id is not null and new.product_id is not null)
   execute function public.apply_stock_movement();
 
--- Verificación de la invariante: debe devolver 0 filas.
+-- ─────────────────────── 3. Backfill desde el ledger ───────────────────────
+
+insert into public.cantina_stock (event_id, cantina_id, product_id, qty)
+select event_id, cantina_id, product_id, sum(qty)::int
+from public.stock_movements
+where event_id is not null and cantina_id is not null and product_id is not null
+group by event_id, cantina_id, product_id
+on conflict (event_id, cantina_id, product_id)
+do update set qty = excluded.qty, updated_at = now();
+
+-- ─────────────────────── 4. Verificación de la invariante ───────────────────────
+-- Debe devolver 0 filas. Ejecutar al cerrar cada evento.
+
 create or replace function public.verify_cantina_stock()
 returns table(event_id uuid, cantina_id uuid, product_id uuid, ledger int, proyeccion int)
-language sql stable as $function$
+language sql stable as $$
   select l.event_id, l.cantina_id, l.product_id, l.ledger, coalesce(cs.qty, 0)
   from (
     select event_id, cantina_id, product_id, sum(qty)::int as ledger
@@ -77,7 +94,36 @@ language sql stable as $function$
   left join public.cantina_stock cs
     on cs.event_id = l.event_id and cs.cantina_id = l.cantina_id and cs.product_id = l.product_id
   where l.ledger is distinct from coalesce(cs.qty, 0);
-$function$;
+$$;
+
+comment on function public.verify_cantina_stock is
+  'Compara la proyección contra el ledger. 0 filas = invariante intacta. '
+  'Si devuelve filas, reconstruir con rebuild_cantina_stock().';
+
+create or replace function public.rebuild_cantina_stock() returns void
+language sql as $$
+  insert into public.cantina_stock (event_id, cantina_id, product_id, qty)
+  select event_id, cantina_id, product_id, sum(qty)::int
+  from public.stock_movements
+  where event_id is not null and cantina_id is not null and product_id is not null
+  group by event_id, cantina_id, product_id
+  on conflict (event_id, cantina_id, product_id)
+  do update set qty = excluded.qty, updated_at = now();
+$$;
+
+-- ─────────────────────── 5. Lectura de stock en O(1) ───────────────────────
+-- Misma firma de columnas que la vista anterior; deja de agregar el histórico.
+
+create or replace view public.v_cantina_inventory as
+select ep.event_id,
+       ec.cantina_id,
+       ep.product_id,
+       coalesce(cs.qty, 0) as current_qty,
+       coalesce(ep.low_stock_threshold, 0) as low_stock_threshold
+from public.event_products ep
+join public.event_cantinas ec on ec.event_id = ep.event_id
+left join public.cantina_stock cs
+  on cs.event_id = ec.event_id and cs.cantina_id = ec.cantina_id and cs.product_id = ep.product_id;
 
 -- ─────────────────────── 6. create_sale sin advisory lock ───────────────────────
 --
@@ -306,35 +352,3 @@ begin
     values (v_sale.event_id, v_sale.cantina_id, v_line.product_id, v_line.qty, 'SALE', 'Anulación', p_sale_id);
   end loop;
 end $function$;
-
-
--- ─────────────────── RPC de agregación del admin (grid de cantinas) ───────────────────
--- Se incluye porque es el objeto de la épica de agregación en servidor:
--- 7 subconsultas correlacionadas por cantina, partiendo de FROM cantinas.
-
-create or replace function public.get_event_cantinas_grid(p_event_id uuid)
- returns table(cantina_id uuid, cantina_name text, qr_token uuid, assigned boolean,
-               total_cents integer, num_sales integer, active_waiters integer,
-               pending_incidents integer, low_stock_count integer, featured jsonb)
- language sql
- stable
-as $function$
-  SELECT
-    c.id, c.name, c.qr_token,
-    EXISTS(SELECT 1 FROM event_cantinas ec WHERE ec.event_id = p_event_id AND ec.cantina_id = c.id) AS assigned,
-    COALESCE((SELECT SUM(s.total_cents) FROM sales s WHERE s.event_id = p_event_id AND s.cantina_id = c.id AND s.status = 'OK'), 0)::int,
-    COALESCE((SELECT COUNT(*) FROM sales s WHERE s.event_id = p_event_id AND s.cantina_id = c.id AND s.status = 'OK'), 0)::int,
-    COALESCE((SELECT COUNT(*) FROM shifts sh WHERE sh.event_id = p_event_id AND sh.cantina_id = c.id AND sh.ended_at IS NULL), 0)::int,
-    COALESCE((SELECT COUNT(*) FROM incidents i WHERE i.event_id = p_event_id AND i.cantina_id = c.id AND i.status = 'pending'), 0)::int,
-    COALESCE((SELECT COUNT(*) FROM v_cantina_inventory v WHERE v.event_id = p_event_id AND v.cantina_id = c.id AND v.current_qty <= v.low_stock_threshold), 0)::int,
-    COALESCE((
-      SELECT jsonb_agg(jsonb_build_object('name', p.name, 'qty', COALESCE(v.current_qty, 0)) ORDER BY p.sku)
-      FROM event_products ep
-      JOIN products p ON p.id = ep.product_id
-      LEFT JOIN v_cantina_inventory v ON v.event_id = p_event_id AND v.cantina_id = c.id AND v.product_id = ep.product_id
-      WHERE ep.event_id = p_event_id AND ep.featured = true AND ep.active = true
-        AND EXISTS(SELECT 1 FROM event_cantinas ec2 WHERE ec2.event_id = p_event_id AND ec2.cantina_id = c.id)
-    ), '[]'::jsonb)
-  FROM cantinas c
-  ORDER BY 4 DESC, 5 DESC, c.name;
-$function$;

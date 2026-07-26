@@ -204,6 +204,17 @@ create table public.shifts (
   constraint shifts_event_id_fkey foreign key (event_id) references public.events(id) on delete cascade
 );
 
+-- Proyección del stock actual (migración 2026-07-26_materialize_stock).
+-- Derivada de stock_movements y mantenida por trigger; NO es fuente de verdad.
+create table public.cantina_stock (
+  event_id   uuid not null references public.events(id)   on delete cascade,
+  cantina_id uuid not null references public.cantinas(id) on delete cascade,
+  product_id uuid not null references public.products(id),
+  qty        integer not null default 0,
+  updated_at timestamptz not null default now(),
+  primary key (event_id, cantina_id, product_id)
+);
+
 create table public.incidents (
   id uuid not null default gen_random_uuid(),
   event_id uuid not null,
@@ -254,14 +265,17 @@ create view public.v_inventory_current as
    from public.stock_movements
   group by event_id, cantina_id, product_id;
 
+-- Lectura de stock en O(1): lee la proyección en lugar de agregar el histórico.
 create view public.v_cantina_inventory as
- select ep.event_id, ec.cantina_id, ep.product_id,
-    (coalesce(sum(sm.qty), (0)::bigint))::integer as current_qty,
+ select ep.event_id,
+    ec.cantina_id,
+    ep.product_id,
+    coalesce(cs.qty, 0) as current_qty,
     coalesce(ep.low_stock_threshold, 0) as low_stock_threshold
-   from ((public.event_products ep
-     join public.event_cantinas ec on ((ec.event_id = ep.event_id)))
-     left join public.stock_movements sm on (((sm.event_id = ec.event_id) and (sm.cantina_id = ec.cantina_id) and (sm.product_id = ep.product_id))))
-  group by ep.event_id, ec.cantina_id, ep.product_id, ep.low_stock_threshold;
+   from public.event_products ep
+   join public.event_cantinas ec on ec.event_id = ep.event_id
+   left join public.cantina_stock cs
+     on cs.event_id = ec.event_id and cs.cantina_id = ec.cantina_id and cs.product_id = ep.product_id;
 
 create view public.v_sales_by_cantina as
  select event_id, cantina_id, count(*) as num_sales,
