@@ -1,22 +1,193 @@
 @import "tailwindcss";
 @config "../tailwind.config.ts";
 
-/*
-  Elche CF Color Palette (Reference)
-  Defined in tailwind.config.ts as 'elche-...'
-  
-  --elche-green: #00964f;
-  --elche-green-dark: #007a3d;
-  --elche-green-light: #20b368;
-  --elche-white: #ffffff;
-  --elche-bg: #f5f9f7;
-  --elche-gray: #e8f4ee;
-  --elche-text: #1a2e1f;
-  --elche-text-light: #4a5f52;
-*/
+/* ===============================================================
+   CONTRATO DE TOKENS — design.md §6 (fuente de verdad)
+   Nombres canónicos del sistema de diseño Stock Cantinas · Elche CF.
+   Se declaran una sola vez aquí y se consumen por nombre:
+   p. ej. `text-[var(--c-text-muted)]`, `rounded-[var(--r-card)]`.
+   Si un valor no está en design.md, no se inventa: se añade allí primero.
+   =============================================================== */
+:root {
+  /* --- Color de marca --- */
+  --c-primary: #00964f;
+  --c-primary-hover: #007a3d;
+  --c-primary-tint: rgba(0, 150, 79, .10); /* rango permitido .09–.12 */
+  --c-primary-bright: #20b368;             /* gradientes logo/avatar */
+  --c-sidebar: linear-gradient(180deg, #0d3a23, #082a1b);
+  --c-sidebar-accent: #4be08f;
+
+  /* --- Texto --- */
+  --c-text: #1a2e1f;
+  --c-text-2: #4a5f52;
+  --c-text-muted: #8aa397;
+  --c-text-faint: #b3c1b9;
+  --c-placeholder: #94a39a;
+
+  /* --- Superficies y bordes --- */
+  --c-bg: #f5f9f7;
+  --c-surface: #ffffff;
+  --c-surface-sub: #f9fcfb;   /* inputs */
+  --c-surface-alt: #f7fbf9;   /* filas alternas / cabeceras de tabla */
+  --c-border: #e8f4ee;
+  --c-border-input: #e0efe7;
+  --c-divider: #f0f6f2;
+  --c-divider-soft: #f6faf8;
+
+  /* --- Semánticos: fg / bg / border --- */
+  --c-ok: #2a6b45;
+  --c-ok-bg: #eef6f1;
+  --c-ok-bd: #dcefe4;
+
+  --c-warn: #b0790a;
+  --c-warn-bg: #fff7e6;
+  --c-warn-bd: #f3d78f;
+
+  --c-crit: #d63838;
+  --c-crit-bg: #fdecec;
+  --c-crit-bd: #f5b5b5;
+
+  --c-info: #6b7d72;
+  --c-info-bg: #f0f4f2;
+  --c-info-bd: #dde5e0;
+
+  --c-alert: #f59e0b;
+  --c-alert-bg: #fff7ed;
+
+  /* --- Forma --- */
+  --r-card: 16px;
+  --r-card-md: 14px;
+  --r-input: 9px;
+  --r-btn: 11px;
+  --r-chip: 8px;
+  --r-pill: 20px;
+
+  /* --- Elevación --- */
+  --sh-card-hover: 0 10px 26px rgba(16, 40, 26, .10);
+  --sh-btn: 0 3px 10px rgba(0, 150, 79, .28);
+  --sh-logo: 0 4px 12px rgba(0, 150, 79, .35);
+
+  /* --- Tipografía --- */
+  --font-ui: 'Inter', system-ui, sans-serif;
+}
+
+/* ---------------------------------------------------------------
+   POS — tokens propios del terminal de barra (design.md §5, POS DC)
+   --------------------------------------------------------------- */
+:root {
+  /* Cabecera verde del POS */
+  --pos-header: linear-gradient(158deg, #0aa85a, #00854a);
+  --pos-header-solid: #00854a;
+
+  /* Acentos vivos del punto de stock y la barra de progreso.
+     Variantes brillantes de los semánticos, legibles a 8px en barra. */
+  --pos-dot-ok: #22b06a;
+  --pos-dot-warn: #f5a623;
+  --pos-dot-crit: #e5484d;
+
+  /* Badge de incidencias sobre fondo verde */
+  --pos-alert-badge: #ffb300;
+  --pos-alert-icon: #ffd54a;
+}
 
 html,
 body {
-  background-color: #f5f9f7; /* elche-bg */
-  color: #1a2e1f; /* elche-text */
+  background-color: var(--c-bg);
+  color: var(--c-text);
 }
+
+/* ---------------------------------------------------------------
+   Material Symbols Rounded — iconografía del panel de administración
+   --------------------------------------------------------------- */
+.ms {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* Variante rellena (para el ítem de navegación activo, estados, etc.) */
+.ms-fill {
+  font-variation-settings: 'FILL' 1;
+}
+
+/* ---------------------------------------------------------------
+   Animaciones del sistema de diseño (design.md §1 · README)
+   --------------------------------------------------------------- */
+@keyframes sc-fade {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Punto "en vivo" */
+@keyframes sc-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .35; }
+}
+
+/* Feedback táctil al añadir un producto */
+@keyframes sc-cardtap {
+  0% { transform: scale(1); }
+  38% { transform: scale(.93); }
+  100% { transform: scale(1); }
+}
+
+/* Badge de cantidad al aparecer */
+@keyframes sc-pop {
+  0% { transform: scale(0); }
+  55% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+/* Bottom sheet del ticket */
+@keyframes sc-sheetup {
+  from { transform: translateY(102%); }
+  to { transform: translateY(0); }
+}
+
+/* Cajón lateral derecho */
+@keyframes sc-drawerin {
+  from { transform: translateX(102%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes sc-fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fade-in { animation: sc-fade 0.3s ease; }
+.animate-cardtap { animation: sc-cardtap 0.3s ease; }
+.animate-pop { animation: sc-pop 0.3s ease; }
+.animate-sheetup { animation: sc-sheetup 0.28s cubic-bezier(.22, 1, .36, 1); }
+.animate-drawerin { animation: sc-drawerin 0.26s cubic-bezier(.22, 1, .36, 1); }
+.animate-overlay { animation: sc-fadein 0.2s ease; }
+
+/* Scroll sin barra visible (chips y listas del POS) */
+.noscroll { scrollbar-width: none; -ms-overflow-style: none; }
+.noscroll::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-cardtap,
+  .animate-pop,
+  .animate-sheetup,
+  .animate-drawerin,
+  .animate-overlay {
+    animation: none;
+  }
+}
+
+/* Scrollbars discretas dentro del panel */
+.sc-scroll::-webkit-scrollbar { width: 9px; height: 9px; }
+.sc-scroll::-webkit-scrollbar-thumb { background: #d3e6db; border-radius: 9px; }
+.sc-scroll::-webkit-scrollbar-track { background: transparent; }
