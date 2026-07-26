@@ -1,5 +1,13 @@
 # Guía de Diseño - Stock Cantinas Elche CF
 
+> ⚠️ **Documento histórico — no es el contrato vigente.**
+> Describe la interfaz anterior al rediseño (POS con pestañas
+> "Venta / Inventario / Ventas", cabecera verde con gradiente horizontal).
+> El sistema de diseño en vigor es **[`docs/design.md`](docs/design.md)**
+> (tokens §6 y matriz de estados §7); el recorrido de pantallas está en
+> [`docs/design-handoff.md`](docs/design-handoff.md).
+> Se conserva sólo como referencia de la paleta original.
+
 ## 🎨 Paleta de Colores
 
 El diseño está inspirado en los colores oficiales del Elche CF:
