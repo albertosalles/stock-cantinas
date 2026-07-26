@@ -74,7 +74,13 @@ dist/
 .turbo/
 
 
-# PWA
+# PWA (generados en cada build por @ducanh2912/next-pwa)
 public/sw.js
+public/sw.js.map
 public/workbox-*.js
 public/worker-*.js
+public/swe-worker-*.js
+public/fallback-*.js
+
+# Ajustes locales de Claude Code (launch.json sí se versiona)
+.claude/settings.local.json
