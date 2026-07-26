@@ -1,6 +1,10 @@
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
 import { supabase } from '@/lib/supabaseClient';
+
+// exceljs (~1 MB) y file-saver se cargan bajo demanda, no en el arranque: sólo se
+// usan al exportar el cierre, una acción puntual del administrador. Importarlos de
+// forma estática penalizaba el arranque de la PWA en todos los dispositivos,
+// incluidos los TPV que nunca exportan (INF-1, defecto 4). Mismo patrón que
+// useStripeTerminal con @stripe/terminal-js.
 
 // --- CONFIGURACIÓN DE RANGOS ---
 // Aquí defines dónde empieza y termina cada hoja.
@@ -27,6 +31,13 @@ function normalizeName(name: string): string {
 export async function exportInventoryToExcel(eventId: string, eventName: string) {
     try {
         console.time("⏱️ Exportación"); // Cronómetro para medir rendimiento
+
+        // 0. Cargar las librerías pesadas en paralelo con los datos: el coste de red
+        // del chunk se solapa con las consultas y no se nota respecto al import estático.
+        const [{ default: ExcelJS }, { saveAs }] = await Promise.all([
+            import('exceljs'),
+            import('file-saver'),
+        ]);
 
         // 1. Cargar datos (Supabase + Plantilla) en paralelo para ganar velocidad
         const [templateBuffer, inventoryResponse, finalResponse] = await Promise.all([

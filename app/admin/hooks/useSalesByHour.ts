@@ -1,5 +1,4 @@
-import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
 
 export interface HourBucket {
@@ -16,11 +15,8 @@ export interface HourBucket {
  * Sólo cuenta ventas en estado OK (las anuladas no computan).
  */
 export function useSalesByHour(eventId: string | undefined) {
-  const queryClient = useQueryClient();
-  const key = ['sales_by_hour', eventId];
-
   const { data = [], isLoading, refetch } = useQuery({
-    queryKey: key,
+    queryKey: ['sales_by_hour', eventId],
     enabled: !!eventId,
     refetchInterval: 60000,
     queryFn: async (): Promise<HourBucket[]> => {
@@ -47,17 +43,19 @@ export function useSalesByHour(eventId: string | undefined) {
     },
   });
 
-  // Cada venta nueva mueve el gráfico
-  useEffect(() => {
-    if (!eventId) return;
-    const channel = supabase
-      .channel(`sales-hour-${eventId}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'sales', filter: `event_id=eq.${eventId}`,
-      }, () => queryClient.invalidateQueries({ queryKey: key }))
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, queryClient]);
+  // El gráfico se refresca SÓLO por el sondeo de 60 s de arriba, a propósito.
+  //
+  // Aquí había una suscripción Realtime a la tabla `sales` que nunca disparaba,
+  // porque `sales` no está en la publicación `supabase_realtime` (INF-1, defecto 1).
+  // Se ha retirado en lugar de activarla: hacerla funcionar hoy sería un retroceso,
+  // porque esta queryFn se descarga TODAS las ventas del evento para agruparlas en
+  // el cliente, y a 6-7 ventas/s eso son 6-7 descargas por segundo de miles de filas.
+  // El sondeo de 60 s estaba enmascarando el problema.
+  //
+  // El tiempo real de este gráfico se activa cuando existan las dos piezas que lo
+  // hacen barato: el RPC de agregación en servidor (épica «Agregación en servidor y
+  // paginación eficiente») y la agrupación temporal de invalidaciones (épica
+  // «Reducción del fan-out de Realtime»).
 
   return { buckets: data, loading: isLoading, refresh: refetch };
 }

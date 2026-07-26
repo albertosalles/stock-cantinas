@@ -47,10 +47,13 @@ export function usePosData(eventId: string, cantinaId: string, sessionChecked: b
   });
 
   // 2. QUERY: Inventario
-  // staleTime: 0 porque el stock cambia mucho.
+  // staleTime: 0 porque el stock cambia mucho. DEBE ser explícito: sin él la query
+  // hereda los 5 min del provider y, si cae el WebSocket, el TPV vendería contra
+  // stock de hasta 5 minutos atrás sin ninguna señal (INF-1, defecto 2).
   const { data: inventory = [], isLoading: loadingInv, refetch: refetchInventory } = useQuery({
     queryKey: ['inventory', eventId, cantinaId],
     enabled: sessionChecked && !!eventId && !!cantinaId,
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('v_cantina_inventory')
@@ -66,6 +69,7 @@ export function usePosData(eventId: string, cantinaId: string, sessionChecked: b
   const { data: totals = { num_sales: 0, total_cents: 0, total_items: 0 }, refetch: refetchTotals } = useQuery({
     queryKey: ['totals', eventId, cantinaId],
     enabled: sessionChecked && !!eventId && !!cantinaId,
+    staleTime: 0, // la recaudación de la barra también cambia en cada venta
     queryFn: async () => {
       const { data, error } = await supabase
         .from('v_sales_by_cantina')
@@ -91,11 +95,11 @@ export function usePosData(eventId: string, cantinaId: string, sessionChecked: b
   }, [inventory]);
 
   // 5. Sincronización Real-Time
-  // Si useLiveInventory detecta un cambio (por websocket),
-  // invalidamos la caché para que React Query vuelva a pedir datos frescos.
+  // useLiveInventory devuelve un contador de cambios; al incrementarse invalidamos
+  // la caché para que React Query vuelva a pedir datos frescos. El `> 0` evita
+  // invalidar en el montaje, cuando todavía no ha llegado ningún mensaje.
   useEffect(() => {
-    if (changes) {
-      // Invalidate queries forza un refetch suave
+    if (changes > 0) {
       queryClient.invalidateQueries({ queryKey: ['inventory', eventId, cantinaId] });
       queryClient.invalidateQueries({ queryKey: ['totals', eventId, cantinaId] });
     }
