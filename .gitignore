@@ -83,4 +83,6 @@ public/swe-worker-*.js
 public/fallback-*.js
 
 # Ajustes locales de Claude Code (launch.json sí se versiona)
-.claude/settings.local.json
+.claude/
+
+.deploy/

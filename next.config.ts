@@ -13,7 +13,9 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 });
 
 const nextConfig: NextConfig = {
-  // Tus configuraciones futuras irían aquí
+  // Genera .next/standalone: un servidor autocontenido con solo las
+  // dependencias que realmente se usan. Reduce mucho la imagen Docker.
+  output: "standalone",
 };
 
 export default withPWA(nextConfig);
