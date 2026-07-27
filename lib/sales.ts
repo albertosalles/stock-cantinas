@@ -59,6 +59,49 @@ export async function createSale(
   return data;
 }
 
+/** Una venta de la cola offline, lista para enviar en lote. */
+export interface BatchSaleInput {
+  clientRequestId: string;
+  eventId: string;
+  cantinaId: string;
+  userId: string;
+  waiterId?: string;
+  lines: { productId: string; qty: number }[];
+  allowOversell?: boolean;
+}
+
+export interface BatchSaleResult {
+  client_request_id: string;
+  sale_id: string | null;
+  ok: boolean;
+  error: string | null;
+}
+
+/**
+ * Vacía la cola offline en una sola llamada.
+ *
+ * El servidor procesa cada venta en su propia subtransacción: una que falle (por
+ * ejemplo, un producto retirado del catálogo) no impide registrar las demás, y se
+ * devuelve marcada para que el cliente la conserve en cola.
+ *
+ * Idempotente por `clientRequestId`: reenviar un lote ya aplicado no duplica nada.
+ */
+export async function createSalesBatch(sales: BatchSaleInput[]): Promise<BatchSaleResult[]> {
+  const { data, error } = await supabase.rpc('create_sales_batch', {
+    p_sales: sales.map(s => ({
+      clientRequestId: s.clientRequestId,
+      eventId: s.eventId,
+      cantinaId: s.cantinaId,
+      userId: s.userId,
+      waiterId: s.waiterId || null,
+      lines: s.lines,
+      allowOversell: s.allowOversell ?? true,
+    })),
+  });
+  if (error) throw error;
+  return (data ?? []) as BatchSaleResult[];
+}
+
 /**
  * Anula una venta (soft): la marca CANCELED y restaura el stock mediante
  * movimientos compensatorios. El motivo es obligatorio.

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { get, set } from 'idb-keyval';
-import { createSale, generateUUID } from '@/lib/sales';
+import { createSalesBatch, generateUUID } from '@/lib/sales';
 
 const OFFLINE_QUEUE_KEY = 'offline_sales_queue';
 
@@ -53,6 +53,15 @@ export function useOfflineSales() {
   };
 
   // 3. Sincronizar
+  //
+  // La cola se vacía en UN solo viaje mediante `create_sales_batch`. Antes se
+  // recorría con un await por venta: 200 ventas acumuladas tras un corte de red
+  // eran 200 idas y vueltas consecutivas, justo cuando la conexión acaba de
+  // recuperarse y es más frágil.
+  //
+  // El servidor procesa cada venta en su propia subtransacción, así que una que
+  // falle no impide registrar las demás — mismo comportamiento que el bucle
+  // anterior. Las fallidas se devuelven y se conservan en cola para reintentar.
   const syncQueue = async () => {
     if (isSyncing) return;
     isSyncing = true;
@@ -61,25 +70,33 @@ export function useOfflineSales() {
       if (currentQueue.length === 0) return;
 
       console.log(`🔄 Intentando sincronizar ${currentQueue.length} ventas...`);
-      const failedQueue: PendingSale[] = [];
+
+      let failedQueue: PendingSale[] = [];
       let syncedCount = 0;
 
-      for (const sale of currentQueue) {
-        try {
-          await createSale(
-            sale.payload.eventId,
-            sale.payload.cantinaId,
-            sale.payload.userId,
-            sale.payload.lines,
+      try {
+        const results = await createSalesBatch(
+          currentQueue.map(sale => ({
             // La venta offline ya ocurrió físicamente: se registra aunque el stock
             // quede negativo. La clave de idempotencia evita duplicados en reintentos.
-            { clientRequestId: sale.id, allowOversell: true, waiterId: sale.payload.waiterId }
-          );
-          syncedCount++;
-        } catch (error) {
-          console.error("❌ Falló venta:", sale.id, error);
-          failedQueue.push(sale);
-        }
+            clientRequestId: sale.id,
+            allowOversell: true,
+            ...sale.payload,
+          }))
+        );
+
+        const failedIds = new Set(
+          results.filter(r => !r.ok).map(r => r.client_request_id)
+        );
+        results.filter(r => !r.ok).forEach(r => console.error('❌ Falló venta:', r.client_request_id, r.error));
+
+        failedQueue = currentQueue.filter(s => failedIds.has(s.id));
+        syncedCount = currentQueue.length - failedQueue.length;
+      } catch (error) {
+        // Fallo de red del lote entero: se conserva la cola intacta y se
+        // reintentará en la próxima reconexión.
+        console.error('❌ No se pudo sincronizar el lote:', error);
+        failedQueue = currentQueue;
       }
 
       await set(OFFLINE_QUEUE_KEY, failedQueue);

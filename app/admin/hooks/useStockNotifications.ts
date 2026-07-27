@@ -17,54 +17,25 @@ export function useStockNotifications(eventId: string | undefined) {
     const { data: alerts = [], isLoading, refetch } = useQuery({
         queryKey: ['stock_notifications', eventId],
         enabled: !!eventId,
-        queryFn: async () => {
-            // 1. Productos bajo mínimo.
-            //
-            // Sólo se avisa al administrador de los productos para los que ÉL ha
-            // definido un umbral. `low_stock_threshold` es 0 por defecto en la BD,
-            // así que 0 significa "sin umbral definido", no "avisar al agotarse":
-            // por eso se exige > 0 y no basta con comprobar que no sea NULL.
-            const { data: inventoryData, error: invError } = await supabase
-                .from('v_cantina_inventory')
-                .select('cantina_id, product_id, current_qty, low_stock_threshold')
-                .eq('event_id', eventId)
-                .gt('low_stock_threshold', 0);
+        // Una sola llamada: el RPC filtra por umbral y resuelve los nombres de
+        // producto y cantina en el servidor. Antes eran tres consultas — el
+        // inventario del evento entero (productos × cantinas) y dos más para
+        // resolver nombres — y el filtrado se repetía en el cliente.
+        //
+        // La regla de umbral vive ahora en el RPC: sólo se avisa de productos con
+        // umbral definido (> 0). Un umbral 0 significa "no avisar", no "avisar al
+        // agotarse".
+        queryFn: async (): Promise<StockAlert[]> => {
+            const { data, error } = await supabase.rpc('get_stock_alerts', { p_event_id: eventId });
+            if (error) throw error;
 
-            if (invError) throw invError;
-
-            const rawItems = (inventoryData ?? []).filter((item: any) => {
-                const qty = item.current_qty ?? 0;
-                const threshold = item.low_stock_threshold ?? 0;
-                return threshold > 0 && qty <= threshold;
-            });
-
-            if (rawItems.length === 0) return [];
-
-            // 2. Extract IDs to fetch names
-            // We use Sets to avoid duplicates
-            const productIds = Array.from(new Set(rawItems.map((i: any) => i.product_id)));
-            const cantinaIds = Array.from(new Set(rawItems.map((i: any) => i.cantina_id)));
-
-            // 3. Fetch Names in parallel
-            const [prodRes, cantRes] = await Promise.all([
-                supabase.from('products').select('id, name').in('id', productIds),
-                supabase.from('cantinas').select('id, name').in('id', cantinaIds)
-            ]);
-
-            if (prodRes.error) throw prodRes.error;
-            if (cantRes.error) throw cantRes.error;
-
-            const productMap = new Map(prodRes.data?.map(p => [p.id, p.name]));
-            const cantinaMap = new Map(cantRes.data?.map(c => [c.id, c.name]));
-
-            // 4. Merge
-            return rawItems.map((item: any) => ({
-                cantinaId: item.cantina_id,
-                cantinaName: cantinaMap.get(item.cantina_id) ?? 'Cantina ???',
-                productId: item.product_id,
-                productName: productMap.get(item.product_id) ?? 'Producto ???',
-                currentQty: item.current_qty,
-                threshold: item.low_stock_threshold
+            return (data ?? []).map((row: any) => ({
+                cantinaId: row.cantina_id,
+                cantinaName: row.cantina_name,
+                productId: row.product_id,
+                productName: row.product_name,
+                currentQty: row.current_qty,
+                threshold: row.threshold,
             }));
         },
         // Refresh every minute even if no activity, just in case

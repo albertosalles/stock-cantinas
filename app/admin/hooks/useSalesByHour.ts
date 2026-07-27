@@ -19,27 +19,18 @@ export function useSalesByHour(eventId: string | undefined) {
     queryKey: ['sales_by_hour', eventId],
     enabled: !!eventId,
     refetchInterval: 60000,
+    // La agregación la hace Postgres: devuelve una fila por hora en lugar de una
+    // por venta. Antes se descargaban todas las ventas del evento para agrupar
+    // aquí, cada 60 s y por cada admin conectado.
     queryFn: async (): Promise<HourBucket[]> => {
-      const { data, error } = await supabase
-        .from('sales')
-        .select('created_at, total_cents')
-        .eq('event_id', eventId)
-        .eq('status', 'OK')
-        .order('created_at', { ascending: true });
-
+      const { data, error } = await supabase.rpc('get_sales_by_hour', { p_event_id: eventId });
       if (error) throw error;
 
-      const buckets = new Map<number, HourBucket>();
-      (data ?? []).forEach((s: any) => {
-        if (!s.created_at) return;
-        const h = new Date(s.created_at).getHours();
-        const b = buckets.get(h) ?? { hora: `${h}h`, totalCents: 0, numSales: 0 };
-        b.totalCents += s.total_cents ?? 0;
-        b.numSales += 1;
-        buckets.set(h, b);
-      });
-
-      return [...buckets.entries()].sort((a, b) => a[0] - b[0]).map(([, b]) => b);
+      return (data ?? []).map((row: any) => ({
+        hora: `${new Date(row.hora).getHours()}h`,
+        totalCents: row.total_cents ?? 0,
+        numSales: row.num_sales ?? 0,
+      }));
     },
   });
 
