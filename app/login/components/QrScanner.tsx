@@ -45,9 +45,13 @@ export default function QrScanner({ onScan }: QrScannerProps) {
   }, []);
 
   return (
-    <div className="relative">
-      <div id={idRef.current} className="w-full rounded-2xl overflow-hidden bg-black/90 min-h-[240px]" />
-      <div className="text-center text-xs text-elche-text-light font-medium mt-2">
+    <div>
+      <div
+        id={idRef.current}
+        className="min-h-[240px] w-full overflow-hidden rounded-[var(--r-card-md)] border border-[var(--c-border)] bg-black/90"
+      />
+      <div className="mt-2 flex items-center justify-center gap-1.5 text-[11.5px] font-medium text-[var(--c-text-muted)]">
+        <span className="ms text-[15px]">center_focus_weak</span>
         Apunta la cámara al código QR
       </div>
     </div>

@@ -8,40 +8,58 @@ interface EventSelectorProps {
 
 export default function EventSelector({ events, onSelect }: EventSelectorProps) {
   return (
-    <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-      <h2 className="text-xl font-bold mb-6 text-elche-text text-center">
-        ¿En qué evento estás trabajando?
-      </h2>
+    <div className="animate-fade-in grid gap-4">
+      <div className="flex items-center gap-3">
+        <span className="ms rounded-[var(--r-btn)] bg-[var(--c-primary-tint)] p-2.5 text-[22px] text-[var(--c-primary)]">
+          sports_soccer
+        </span>
+        <div>
+          <div className="text-[15px] font-extrabold tracking-[-0.01em] text-[var(--c-text)]">
+            ¿En qué evento trabajas?
+          </div>
+          <div className="mt-0.5 text-xs font-medium text-[var(--c-text-muted)]">
+            Selecciona el partido de hoy
+          </div>
+        </div>
+      </div>
+
       {events.length === 0 ? (
-        <div className="text-center py-12 bg-elche-gray/10 rounded-2xl border border-dashed border-elche-gray text-elche-text-light">
-          No hay eventos activos en este momento
+        <div className="rounded-[var(--r-card-md)] border border-dashed border-[var(--c-border)] py-10 text-center">
+          <span className="ms text-[36px] text-[#bfe3cf]">event_busy</span>
+          <div className="mt-2 text-[12.5px] font-bold text-[var(--c-text-2)]">Sin eventos activos</div>
+          <div className="mt-0.5 text-[11px] font-semibold text-[var(--c-text-muted)]">
+            No hay ningún evento abierto en este momento
+          </div>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2.5">
           {events.map(event => (
             <button
               key={event.id}
               onClick={() => onSelect(event)}
-              className="p-4 rounded-2xl border-2 border-elche-gray bg-white text-left transition-all duration-200 hover:border-elche-green hover:bg-elche-green/5 hover:-translate-y-0.5 hover:shadow-md cursor-pointer group relative w-full"
+              className="group flex w-full items-center gap-3 rounded-[var(--r-card-md)] border border-[var(--c-border)] bg-[var(--c-surface)] px-3.5 py-3 text-left transition-all hover:-translate-y-px hover:border-[var(--c-primary)] hover:shadow-[var(--sh-card-hover)]"
             >
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="text-lg font-bold text-elche-text mb-1 group-hover:text-elche-green transition-colors">
-                    {event.name}
-                  </div>
-                  <div className="text-xs text-elche-text-light font-semibold uppercase tracking-wide flex items-center gap-1.5">
-                    <span>📅</span>
-                    {new Date(event.date).toLocaleDateString('es-ES', { 
-                      day: 'numeric', 
-                      month: 'long', 
-                      year: 'numeric'
-                    })}
-                  </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[14px] font-extrabold tracking-[-0.01em] text-[var(--c-text)]">
+                  {event.name}
                 </div>
-                <div className="bg-elche-gray/30 px-2.5 py-1 rounded-lg text-xs font-bold text-elche-text-light group-hover:bg-white group-hover:text-elche-green transition-colors shadow-sm">
-                  {event.cantinas_count} 🏪
+                <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--c-text-muted)]">
+                  <span className="ms text-[15px]">event</span>
+                  {new Date(event.date).toLocaleDateString('es-ES', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                  })}
                 </div>
               </div>
+
+              <span className="flex shrink-0 items-center gap-1 rounded-full bg-[var(--c-surface-alt)] px-2.5 py-1 text-[11px] font-bold text-[var(--c-text-2)]">
+                <span className="ms text-[14px]">storefront</span>
+                {event.cantinas_count}
+              </span>
+              <span className="ms shrink-0 text-lg text-[var(--c-text-muted)] transition-colors group-hover:text-[var(--c-primary)]">
+                arrow_forward
+              </span>
             </button>
           ))}
         </div>
@@ -49,4 +67,3 @@ export default function EventSelector({ events, onSelect }: EventSelectorProps) 
     </div>
   );
 }
-

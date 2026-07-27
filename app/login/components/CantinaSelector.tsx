@@ -10,30 +10,49 @@ interface CantinaSelectorProps {
 
 export default function CantinaSelector({ cantinas, selectedEvent, onSelect, onBack }: CantinaSelectorProps) {
   return (
-    <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-elche-text">
-          Selecciona tu cantina
-        </h2>
+    <div className="animate-fade-in grid gap-4">
+      {/* Evento ya elegido */}
+      <div className="flex items-center gap-3 rounded-[var(--r-card-md)] border border-[#cdeede] bg-[#eef8f2] px-3.5 py-3">
+        <span className="ms text-xl text-[var(--c-primary)]">sports_soccer</span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--c-ok)]">Evento</div>
+          <div className="truncate text-[14px] font-extrabold tracking-[-0.01em] text-[var(--c-text)]">
+            {selectedEvent?.name}
+          </div>
+        </div>
         <button
           onClick={onBack}
-          className="text-xs font-bold text-elche-text-light hover:text-elche-green uppercase tracking-wide px-3 py-1.5 rounded-lg hover:bg-elche-gray/20 transition-colors"
+          title="Cambiar de evento"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border border-[var(--c-border-input)] bg-white text-[var(--c-text-2)] transition-colors hover:border-[var(--c-primary)] hover:text-[var(--c-primary)]"
         >
-          ← Atrás
+          <span className="ms text-lg">edit</span>
         </button>
       </div>
-      
-      <div className="p-5 bg-gradient-to-br from-elche-primary to-elche-secondary rounded-2xl mb-6 text-white shadow-lg shadow-elche-primary/20">
-        <div className="text-xs opacity-80 uppercase font-bold tracking-wide mb-1">Evento seleccionado</div>
-        <div className="text-lg font-extrabold">{selectedEvent?.name}</div>
+
+      <div className="flex items-center gap-3">
+        <span className="ms rounded-[var(--r-btn)] bg-[var(--c-primary-tint)] p-2.5 text-[22px] text-[var(--c-primary)]">
+          storefront
+        </span>
+        <div>
+          <div className="text-[15px] font-extrabold tracking-[-0.01em] text-[var(--c-text)]">
+            Selecciona tu cantina
+          </div>
+          <div className="mt-0.5 text-xs font-medium text-[var(--c-text-muted)]">
+            Sólo aparecen las de este evento
+          </div>
+        </div>
       </div>
 
       {cantinas.length === 0 ? (
-        <div className="text-center py-12 bg-elche-gray/10 rounded-2xl border border-dashed border-elche-gray text-elche-text-light">
-          No hay cantinas disponibles para este evento
+        <div className="rounded-[var(--r-card-md)] border border-dashed border-[var(--c-border)] py-10 text-center">
+          <span className="ms text-[36px] text-[#bfe3cf]">storefront</span>
+          <div className="mt-2 text-[12.5px] font-bold text-[var(--c-text-2)]">Sin cantinas disponibles</div>
+          <div className="mt-0.5 text-[11px] font-semibold text-[var(--c-text-muted)]">
+            Este evento no tiene cantinas asignadas
+          </div>
         </div>
       ) : (
-        <div className="grid gap-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+        <div className="sc-scroll grid max-h-[340px] gap-2.5 overflow-y-auto pr-1">
           {cantinas.map(cantina => {
             const disabled = !cantina.has_credentials || !cantina.access_enabled;
             return (
@@ -41,36 +60,44 @@ export default function CantinaSelector({ cantinas, selectedEvent, onSelect, onB
                 key={cantina.cantina_id}
                 onClick={() => onSelect(cantina)}
                 disabled={disabled}
-                className={`
-                  p-4 rounded-2xl border-2 text-left transition-all duration-200 relative w-full
-                  ${disabled 
-                    ? 'bg-elche-gray/30 border-transparent opacity-60 cursor-not-allowed' 
-                    : 'bg-white border-elche-gray hover:border-elche-green hover:shadow-md hover:-translate-y-0.5 cursor-pointer group'
-                  }
-                `}
+                className={`group flex w-full items-center gap-3 rounded-[var(--r-card-md)] border px-3.5 py-3 text-left transition-all ${
+                  disabled
+                    ? 'cursor-not-allowed border-[var(--c-border)] bg-[var(--c-bg)] opacity-60'
+                    : 'border-[var(--c-border)] bg-[var(--c-surface)] hover:-translate-y-px hover:border-[var(--c-primary)] hover:shadow-[var(--sh-card-hover)]'
+                }`}
               >
-                <div className={`text-base font-bold mb-1 ${disabled ? 'text-elche-text' : 'text-elche-text group-hover:text-elche-green transition-colors'}`}>
-                  {cantina.cantina_name}
-                </div>
-                {cantina.cantina_location && (
-                  <div className="text-xs text-elche-text-light font-medium flex items-center gap-1">
-                    <span>📍</span> {cantina.cantina_location}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[14px] font-extrabold tracking-[-0.01em] text-[var(--c-text)]">
+                    {cantina.cantina_name}
                   </div>
-                )}
-                
-                {/* Badges de estado */}
-                <div className="flex flex-col gap-1 mt-2">
+
+                  {cantina.cantina_location && (
+                    <div className="mt-0.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--c-text-muted)]">
+                      <span className="ms text-[15px]">location_on</span>
+                      {cantina.cantina_location}
+                    </div>
+                  )}
+
+                  {/* Motivo por el que no se puede entrar */}
                   {!cantina.has_credentials && (
-                    <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded w-fit font-bold">
-                      ⚠️ Sin credenciales
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[var(--c-crit-bg)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--c-crit)]">
+                      <span className="ms text-[13px]">error</span>
+                      Sin credenciales
                     </span>
                   )}
                   {cantina.has_credentials && !cantina.access_enabled && (
-                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded w-fit font-bold">
-                      🔒 Acceso cerrado
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-[var(--c-warn-bg)] px-2 py-0.5 text-[10.5px] font-bold text-[var(--c-warn)]">
+                      <span className="ms text-[13px]">lock</span>
+                      Acceso cerrado
                     </span>
                   )}
                 </div>
+
+                {!disabled && (
+                  <span className="ms shrink-0 text-lg text-[var(--c-text-muted)] transition-colors group-hover:text-[var(--c-primary)]">
+                    arrow_forward
+                  </span>
+                )}
               </button>
             );
           })}
@@ -79,4 +106,3 @@ export default function CantinaSelector({ cantinas, selectedEvent, onSelect, onB
     </div>
   );
 }
-
