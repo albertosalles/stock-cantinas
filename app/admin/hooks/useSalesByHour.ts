@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useRealtimeInvalidate } from '@/hooks/useEventRealtime';
 
 export interface HourBucket {
   /** Etiqueta del eje ("20h"). */
@@ -34,19 +35,15 @@ export function useSalesByHour(eventId: string | undefined) {
     },
   });
 
-  // El gráfico se refresca SÓLO por el sondeo de 60 s de arriba, a propósito.
+  // Tiempo real activado, ya con las dos piezas que lo hacen barato: la
+  // agregación vive en Postgres (devuelve una fila por franja, no por venta) y
+  // los avisos se agrupan en el bus compartido.
   //
-  // Aquí había una suscripción Realtime a la tabla `sales` que nunca disparaba,
-  // porque `sales` no está en la publicación `supabase_realtime` (INF-1, defecto 1).
-  // Se ha retirado en lugar de activarla: hacerla funcionar hoy sería un retroceso,
-  // porque esta queryFn se descarga TODAS las ventas del evento para agruparlas en
-  // el cliente, y a 6-7 ventas/s eso son 6-7 descargas por segundo de miles de filas.
-  // El sondeo de 60 s estaba enmascarando el problema.
-  //
-  // El tiempo real de este gráfico se activa cuando existan las dos piezas que lo
-  // hacen barato: el RPC de agregación en servidor (épica «Agregación en servidor y
-  // paginación eficiente») y la agrupación temporal de invalidaciones (épica
-  // «Reducción del fan-out de Realtime»).
+  // Se escucha `stock_movements` y no `sales`: toda venta genera movimientos, esa
+  // tabla sí está en la publicación de Realtime, y así no hay que replicar una
+  // tabla más. La suscripción original apuntaba a `sales` y por eso nunca
+  // disparaba (INF-1, defecto 1).
+  useRealtimeInvalidate(eventId, undefined, ['stock_movements'], ['sales_by_hour', eventId]);
 
   return { buckets: data, loading: isLoading, refresh: refetch };
 }

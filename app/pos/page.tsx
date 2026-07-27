@@ -7,6 +7,7 @@ import { usePosSession } from './hooks/usePosSession';
 import { usePosData } from './hooks/usePosData';
 import { useCart } from './hooks/useCart';
 import { useOfflineSales } from './hooks/useOfflineSales';
+import { useRealtimeStatus } from '@/hooks/useEventRealtime';
 import { useStripeTerminal } from './hooks/useStripeTerminal';
 import PosShell, { PosTab } from './components/PosShell';
 import PosSalesTab from './components/PosSalesTab';
@@ -30,6 +31,9 @@ export default function PosPage() {
 
   // 3. Cola offline
   const { queueSale, pendingCount, syncQueue } = useOfflineSales();
+
+  // Estado del canal de la barra: alimenta el aviso de cabecera cuando cae.
+  const realtimeStatus = useRealtimeStatus(session.eventId, session.cantinaId);
 
   // 4. Stripe Terminal
   const terminal = useStripeTerminal();
@@ -239,6 +243,7 @@ export default function PosPage() {
       onTabChange={setTab}
       onReportIncident={() => setShowIncidentModal(true)}
       pendingUploads={pendingCount}
+      realtimeStatus={realtimeStatus}
       onSync={syncQueue}
       onRefresh={refreshAll}
       onLogout={session.logout}

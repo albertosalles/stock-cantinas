@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useRealtimeInvalidate } from '@/hooks/useEventRealtime';
 
 export interface FeaturedStock { name: string; qty: number; }
 
@@ -18,7 +18,6 @@ export interface CantinaGridRow {
 }
 
 export function useCantinasGrid(eventId: string | undefined) {
-  const queryClient = useQueryClient();
   const key = ['cantinas_grid', eventId];
 
   const { data = [], isLoading, refetch } = useQuery({
@@ -32,16 +31,7 @@ export function useCantinasGrid(eventId: string | undefined) {
     },
   });
 
-  useEffect(() => {
-    if (!eventId) return;
-    const invalidate = () => queryClient.invalidateQueries({ queryKey: key });
-    const channel = supabase
-      .channel(`cantinas-grid-${eventId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_movements', filter: `event_id=eq.${eventId}` }, invalidate)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'incidents', filter: `event_id=eq.${eventId}` }, invalidate)
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, queryClient]);
+  useRealtimeInvalidate(eventId, undefined, ['stock_movements', 'incidents'], key);
 
   async function toggleAssign(cantinaId: string, assign: boolean) {
     if (assign) {

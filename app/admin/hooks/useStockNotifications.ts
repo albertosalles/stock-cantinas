@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useRealtimeInvalidate } from '@/hooks/useEventRealtime';
 
 export type StockAlert = {
     cantinaId: string;
@@ -12,8 +12,6 @@ export type StockAlert = {
 };
 
 export function useStockNotifications(eventId: string | undefined) {
-    const queryClient = useQueryClient();
-
     const { data: alerts = [], isLoading, refetch } = useQuery({
         queryKey: ['stock_notifications', eventId],
         enabled: !!eventId,
@@ -42,27 +40,7 @@ export function useStockNotifications(eventId: string | undefined) {
         refetchInterval: 60000
     });
 
-    // Real-time subscription
-    useEffect(() => {
-        if (!eventId) return;
-
-        const channel = supabase
-            .channel(`notifications-${eventId}`)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'stock_movements',
-                filter: `event_id=eq.${eventId}`
-            }, () => {
-                // When stock moves, refresh alerts
-                queryClient.invalidateQueries({ queryKey: ['stock_notifications', eventId] });
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [eventId, queryClient]);
+    useRealtimeInvalidate(eventId, undefined, ['stock_movements'], ['stock_notifications', eventId]);
 
     return {
         alerts,

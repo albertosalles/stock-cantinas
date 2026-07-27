@@ -27,6 +27,8 @@ interface PosShellProps {
   onReportIncident?: () => void;
   /** Ventas encoladas sin subir (modo offline). */
   pendingUploads?: number;
+  /** Estado del canal de tiempo real; 'disconnected' muestra el aviso en cabecera. */
+  realtimeStatus?: 'connecting' | 'connected' | 'disconnected';
   onSync?: () => void;
   onRefresh?: () => void;
   onLogout: () => void;
@@ -48,6 +50,7 @@ export default function PosShell({
   onTabChange,
   onReportIncident,
   pendingUploads = 0,
+  realtimeStatus = 'connecting',
   onSync,
   onRefresh,
   onLogout,
@@ -86,6 +89,21 @@ export default function PosShell({
           </div>
 
           <div className="flex flex-none items-center gap-1.5">
+            {/* Conexión en tiempo real caída.
+                Hasta ahora la degradación era silenciosa: el TPV seguía mostrando
+                el stock de la última sincronización sin avisar, y en una barra eso
+                significa vender contra existencias que ya no son las reales. */}
+            {realtimeStatus === 'disconnected' && (
+              <span
+                title="Sin conexión en tiempo real: el stock mostrado puede no estar actualizado"
+                aria-label="Sin conexión en tiempo real"
+                className="flex h-11 items-center gap-1.5 rounded-[var(--r-btn)] bg-[var(--pos-alert-badge)] px-3 text-[var(--pos-header-solid)]"
+              >
+                <span className="ms text-[19px]">cloud_off</span>
+                <span className="hidden text-[13px] font-extrabold sm:inline">Sin conexión</span>
+              </span>
+            )}
+
             {/* Ventas pendientes de subir (offline) */}
             {pendingUploads > 0 && (
               <button

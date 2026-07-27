@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useRealtimeInvalidate } from '@/hooks/useEventRealtime';
 
 export interface EventDashboard {
   total_cents: number;
@@ -26,8 +26,6 @@ const EMPTY: EventDashboard = {
 };
 
 export function useEventDashboard(eventId: string | undefined) {
-  const queryClient = useQueryClient();
-
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['event_dashboard', eventId],
     enabled: !!eventId,
@@ -65,20 +63,9 @@ export function useEventDashboard(eventId: string | undefined) {
     },
   });
 
-  // Realtime: cada movimiento de stock (incluye ventas) refresca el dashboard
-  useEffect(() => {
-    if (!eventId) return;
-    const channel = supabase
-      .channel(`dashboard-${eventId}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'stock_movements',
-        filter: `event_id=eq.${eventId}`,
-      }, () => {
-        queryClient.invalidateQueries({ queryKey: ['event_dashboard', eventId] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, queryClient]);
+  // Cada movimiento de stock (toda venta genera uno) refresca el dashboard,
+  // a través del canal compartido del evento y con los avisos agrupados.
+  useRealtimeInvalidate(eventId, undefined, ['stock_movements'], ['event_dashboard', eventId]);
 
   return {
     kpis: data?.kpis ?? EMPTY,

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { useRealtimeSignal } from '@/hooks/useEventRealtime';
 
 export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -74,27 +75,23 @@ export function useAutoSaveInventory({
         }
     }, [enabled, loadSnapshots]);
 
-    // ─── Realtime: listen for stock_movements to reload snapshots ───
+    // ─── Realtime: otro camarero ha guardado → recargar el conteo ───
+    //
+    // Comparte el canal de la barra con el resto del TPV en lugar de abrir uno
+    // propio, y el servidor ya filtra por cantina. Antes se suscribía a todo el
+    // evento, de modo que el conteo de una barra se recargaba con las ventas de
+    // las otras diecinueve.
+    const stockSignal = useRealtimeSignal(
+        enabled ? eventId : undefined,
+        cantinaId,
+        ['stock_movements'],
+    );
+
     useEffect(() => {
-        if (!enabled || !eventId || !cantinaId) return;
-
-        const channel = supabase
-            .channel(`autosave-inv-${eventId}-${cantinaId}`)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'stock_movements',
-                filter: `event_id=eq.${eventId}`,
-            }, () => {
-                // Another user saved → reload snapshots (respecting editing guard)
-                loadSnapshots();
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [enabled, eventId, cantinaId, loadSnapshots]);
+        // El 0 inicial no dispara recarga: sólo los cambios posteriores.
+        if (!stockSignal || !enabled) return;
+        loadSnapshots();
+    }, [stockSignal, enabled, loadSnapshots]);
 
     // ─── Auto-save a single product ───
     const saveProduct = useCallback(async (productId: string, qty: number) => {

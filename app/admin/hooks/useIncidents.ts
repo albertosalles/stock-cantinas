@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useRealtimeInvalidate } from '@/hooks/useEventRealtime';
 import { resolveIncident } from '@/lib/incidents';
 
 export interface EnrichedIncident {
@@ -60,20 +60,8 @@ export function useIncidents(eventId: string | undefined) {
     },
   });
 
-  // Realtime: cualquier cambio en incidencias del evento refresca la lista
-  useEffect(() => {
-    if (!eventId) return;
-    const channel = supabase
-      .channel(`incidents-${eventId}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'incidents',
-        filter: `event_id=eq.${eventId}`,
-      }, () => {
-        queryClient.invalidateQueries({ queryKey: ['incidents', eventId] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, queryClient]);
+  // Cualquier cambio en incidencias del evento refresca la lista.
+  useRealtimeInvalidate(eventId, undefined, ['incidents'], ['incidents', eventId]);
 
   const resolve = async (id: string) => {
     await resolveIncident(id);

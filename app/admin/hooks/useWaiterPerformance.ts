@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { useRealtimeInvalidate } from '@/hooks/useEventRealtime';
 
 export interface WaiterPerformance {
   waiter_id: string;
@@ -17,7 +17,6 @@ export interface WaiterPerformance {
  * Rendimiento por camarero. Si se pasa cantinaId, se limita a esa cantina.
  */
 export function useWaiterPerformance(eventId: string | undefined, cantinaId?: string) {
-  const queryClient = useQueryClient();
   const key = ['waiter_performance', eventId, cantinaId ?? 'all'];
 
   const { data = [], isLoading, refetch } = useQuery({
@@ -37,17 +36,8 @@ export function useWaiterPerformance(eventId: string | undefined, cantinaId?: st
     },
   });
 
-  // Las ventas nuevas mueven el rendimiento → refrescar en tiempo real
-  useEffect(() => {
-    if (!eventId) return;
-    const channel = supabase
-      .channel(`waiter-perf-${eventId}-${cantinaId ?? 'all'}`)
-      .on('postgres_changes', {
-        event: '*', schema: 'public', table: 'stock_movements', filter: `event_id=eq.${eventId}`,
-      }, () => queryClient.invalidateQueries({ queryKey: key }))
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [eventId, cantinaId, queryClient]);
+  // Las ventas nuevas mueven el rendimiento del camarero.
+  useRealtimeInvalidate(eventId, undefined, ['stock_movements'], key);
 
   return { waiters: data, loading: isLoading, refresh: refetch };
 }
