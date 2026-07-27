@@ -27,7 +27,7 @@ export function useSalesByHour(eventId: string | undefined) {
       if (error) throw error;
 
       return (data ?? []).map((row: any) => ({
-        hora: `${new Date(row.hora).getHours()}h`,
+        hora: `${row.hora}h`,
         totalCents: row.total_cents ?? 0,
         numSales: row.num_sales ?? 0,
       }));

@@ -16,10 +16,17 @@
 -- banco de pruebas) y las agrupaba en JavaScript, cada 60 s y por cada admin
 -- conectado, para pintar 5 barras.
 
+-- Agrupa por HORA DEL DÍA (0-23), no por hora de cada fecha: un evento puede
+-- tener ventas de varias jornadas y el gráfico compara franjas horarias, no días.
+-- Agrupar con date_trunc('hour') produce etiquetas repetidas ("18h" tres veces).
+--
+-- La zona horaria es explícita. La versión anterior usaba getHours() del
+-- navegador, así que las franjas dependían del dispositivo del administrador:
+-- el mismo evento se veía distinto desde otro huso.
 create or replace function public.get_sales_by_hour(p_event_id uuid)
-returns table(hora timestamptz, total_cents integer, num_sales integer)
+returns table(hora smallint, total_cents integer, num_sales integer)
 language sql stable as $$
-  select date_trunc('hour', s.created_at) as hora,
+  select extract(hour from s.created_at at time zone 'Europe/Madrid')::smallint as hora,
          sum(s.total_cents)::int,
          count(*)::int
   from public.sales s
