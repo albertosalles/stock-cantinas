@@ -86,3 +86,8 @@ public/fallback-*.js
 .claude/
 
 .deploy/
+
+# Despliegue autoalojado: trabajo en curso, se versionará cuando esté maduro.
+# Ignorado a propósito para que un `git add -A` no lo arrastre antes de tiempo
+# (ya pasó una vez). Retirar esta línea el día que se quiera subir.
+deploy/
