@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useOpponents, TIPOS_PARTIDO } from '../hooks/useOpponents';
 
 interface EventGeneralTabProps {
   eventName: string;
@@ -9,6 +10,10 @@ interface EventGeneralTabProps {
   setEventDate: (val: string | null) => void;
   kickoffAt: string | null;
   setKickoffAt: (val: string | null) => void;
+  opponentId: string | null;
+  setOpponentId: (val: string | null) => void;
+  matchType: string | null;
+  setMatchType: (val: string | null) => void;
   onSave: () => Promise<void> | void;
 }
 
@@ -19,10 +24,28 @@ export default function EventGeneralTab({
   setEventDate,
   kickoffAt,
   setKickoffAt,
+  opponentId,
+  setOpponentId,
+  matchType,
+  setMatchType,
   onSave,
 }: EventGeneralTabProps) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const { opponents, crearRival } = useOpponents();
+  const [nuevoRival, setNuevoRival] = useState('');
+  const [anadiendo, setAnadiendo] = useState(false);
+
+  const anadirRival = async () => {
+    if (!nuevoRival.trim()) return;
+    try {
+      setOpponentId(await crearRival(nuevoRival));
+      setNuevoRival('');
+      setAnadiendo(false);
+    } catch (e: any) {
+      alert(e.message || 'No se pudo añadir el rival');
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -104,6 +127,69 @@ export default function EventGeneralTab({
                   : dateValue
                     ? 'Necesaria para el mapa de afluencia del partido'
                     : 'Define antes la fecha'}
+              </p>
+            </div>
+          </div>
+
+          {/* Rival y competición. No se usan todavía en ninguna pantalla: se
+              capturan desde ya porque son los únicos datos del evento que no se
+              pueden reconstruir después, y la comparativa histórica por rival
+              (F4) los necesita limpios desde el primer partido real. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Rival</label>
+              {anadiendo ? (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={nuevoRival}
+                    placeholder="Nombre del equipo"
+                    onChange={e => setNuevoRival(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') anadirRival(); if (e.key === 'Escape') setAnadiendo(false); }}
+                    className={inputClass}
+                  />
+                  <button
+                    onClick={anadirRival}
+                    className="shrink-0 rounded-[10px] bg-elche-primary px-3 text-[12.5px] font-bold text-white"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <select
+                    value={opponentId ?? ''}
+                    onChange={e => setOpponentId(e.target.value || null)}
+                    className={`${inputClass} cursor-pointer`}
+                  >
+                    <option value="">Sin rival</option>
+                    {opponents.map(o => (
+                      <option key={o.id} value={o.id}>{o.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setAnadiendo(true)}
+                    title="Añadir un rival nuevo"
+                    className="shrink-0 rounded-[10px] border border-[#e0efe7] px-3 text-[13px] font-bold text-elche-primary transition-colors hover:bg-elche-bg"
+                  >
+                    +
+                  </button>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className={labelClass}>Competición</label>
+              <select
+                value={matchType ?? ''}
+                onChange={e => setMatchType(e.target.value || null)}
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="">Sin especificar</option>
+                {TIPOS_PARTIDO.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <p className="mt-1.5 text-[11px] font-semibold text-[#8aa397]">
+                Un amistoso y una eliminatoria no llenan igual
               </p>
             </div>
           </div>

@@ -133,6 +133,10 @@ export default function EventAdminPage() {
           setEventDate={eventLogic.setEventDate}
           kickoffAt={eventLogic.kickoffAt}
           setKickoffAt={eventLogic.setKickoffAt}
+          opponentId={eventLogic.opponentId}
+          setOpponentId={eventLogic.setOpponentId}
+          matchType={eventLogic.matchType}
+          setMatchType={eventLogic.setMatchType}
           onSave={eventLogic.saveEvent}
         />
       )}
