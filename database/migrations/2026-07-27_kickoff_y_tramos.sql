@@ -70,7 +70,12 @@ as $function$
   rejilla as (
     select
       ev.ko + (g * p_slot_minutes) * interval '1 minute' as inicio,
-      g * p_slot_minutes as minuto
+      g * p_slot_minutes as minuto,
+      -- La fase se asigna por el PUNTO MEDIO del tramo. Con tramos de 30 min, el
+      -- que va de +30 a +60 empieza en la primera parte pero es sobre todo
+      -- descanso: por el inicio, la fase más relevante del análisis desaparecía
+      -- justo en la granularidad más gruesa.
+      g * p_slot_minutes + p_slot_minutes / 2.0 as centro
     from ev,
     generate_series(
       -ceil(p_puertas_min::numeric / p_slot_minutes)::int,
@@ -92,10 +97,10 @@ as $function$
     to_char(r.inicio at time zone 'Europe/Madrid', 'HH24:MI'),
     r.minuto,
     case
-      when r.minuto < 0   then 'Previa'
-      when r.minuto < 45  then '1ª parte'
-      when r.minuto < 60  then 'Descanso'
-      when r.minuto < 105 then '2ª parte'
+      when r.centro < 0   then 'Previa'
+      when r.centro < 45  then '1ª parte'
+      when r.centro < 60  then 'Descanso'
+      when r.centro < 105 then '2ª parte'
       else 'Final'
     end,
     coalesce(v.cents, 0),
