@@ -49,8 +49,10 @@ begin
   values ('Temporada de carga', true, 'open', current_date - 180, current_date + 180)
   returning id into v_season;
 
-  insert into events (name, date, status, season_id)
-  values ('Partido de carga', now(), 'live', v_season)
+  -- El pitido inicial se sitúa 2 h atrás para que toda la ventana del partido
+  -- (puertas → final) quede en el pasado y el mapa de calor tenga datos completos.
+  insert into events (name, date, status, season_id, kickoff_at)
+  values ('Partido de carga', now(), 'live', v_season, now() - interval '2 hours')
   returning id into v_event;
 
   -- ── Catálogo (30 productos, réplica del catálogo real del club) ──
@@ -126,8 +128,13 @@ begin
   -- ── Peso de cada barra: unas venden mucho más que otras ──
   select array_agg(0.3 + random() * 1.7) into v_cantina_w from generate_series(1, p_num_cantinas);
 
-  -- ── Ventas, repartidas por la curva horaria del partido ──
-  -- 40 % pre-partido (2 h), 45 % concentrado en el descanso (20 min), 15 % post.
+  -- ── Ventas, repartidas por la curva del partido ──
+  -- Los tramos se expresan RELATIVOS AL PITIDO INICIAL, igual que hace
+  -- get_sales_by_slot, para que ambos modelos digan lo mismo:
+  --   40 % en la previa   (−90 a 0 min, desde la apertura de puertas)
+  --   45 % en el descanso (+45 a +60), que es el pico real de una barra
+  --   15 % tras el final  (+105 a +135)
+  -- Durante las partes casi no se vende: la gente está en la grada.
   --
   -- OJO: los valores aleatorios se calculan en la lista de selección de una CTE
   -- sobre generate_series, NO en un `cross join lateral (select random() ...)`.
@@ -153,11 +160,11 @@ begin
   )
   insert into sales (id, event_id, cantina_id, user_id, waiter_id, total_cents, total_items, status, created_at, client_request_id)
   select gen_random_uuid(), v_event, cdf.id, v_user, wl.id, 0, 0, 'OK',
-         now() - interval '4 hours' +
+         (now() - interval '2 hours') +
            (case
-              when b.bucket < 0.40 then b.u_min * 120
-              when b.bucket < 0.85 then 150 + b.u_min * 20
-              else 200 + b.u_min * 30
+              when b.bucket < 0.40 then -90 + b.u_min * 90
+              when b.bucket < 0.85 then  45 + b.u_min * 15
+              else                      105 + b.u_min * 30
             end) * interval '1 minute',
          gen_random_uuid()
   from base b

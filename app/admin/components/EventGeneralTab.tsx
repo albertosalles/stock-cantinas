@@ -7,6 +7,8 @@ interface EventGeneralTabProps {
   setEventName: (val: string) => void;
   eventDate: string | null;
   setEventDate: (val: string | null) => void;
+  kickoffAt: string | null;
+  setKickoffAt: (val: string | null) => void;
   onSave: () => Promise<void> | void;
 }
 
@@ -15,6 +17,8 @@ export default function EventGeneralTab({
   setEventName,
   eventDate,
   setEventDate,
+  kickoffAt,
+  setKickoffAt,
   onSave,
 }: EventGeneralTabProps) {
   const [saving, setSaving] = useState(false);
@@ -41,6 +45,27 @@ export default function EventGeneralTab({
   // El input date espera YYYY-MM-DD; la BD guarda timestamptz
   const dateValue = eventDate ? String(eventDate).slice(0, 10) : '';
 
+  // La hora de inicio se edita como HH:MM local y se guarda como timestamptz
+  // combinándola con la fecha del evento.
+  const kickoffValue = kickoffAt
+    ? new Date(kickoffAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false })
+    : '';
+
+  const onKickoffChange = (hhmm: string) => {
+    if (!hhmm || !dateValue) { setKickoffAt(null); return; }
+    const [h, m] = hhmm.split(':').map(Number);
+    const d = new Date(`${dateValue}T00:00:00`);
+    d.setHours(h, m, 0, 0);
+    setKickoffAt(d.toISOString());
+  };
+
+  // Apertura de puertas: dato derivado, no editable. Se muestra para que quede
+  // claro desde cuándo se cuenta la afluencia.
+  const puertas = kickoffAt
+    ? new Date(new Date(kickoffAt).getTime() - 90 * 60000)
+        .toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false })
+    : null;
+
   return (
     <div className="mx-auto max-w-[1440px] animate-fade-in">
       <div className="max-w-2xl overflow-hidden rounded-2xl border border-elche-gray bg-white">
@@ -54,14 +79,33 @@ export default function EventGeneralTab({
             <label className={labelClass}>Nombre</label>
             <input type="text" value={eventName} onChange={e => setEventName(e.target.value)} className={inputClass} />
           </div>
-          <div>
-            <label className={labelClass}>Fecha</label>
-            <input
-              type="date"
-              value={dateValue}
-              onChange={e => setEventDate(e.target.value || null)}
-              className={inputClass}
-            />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={labelClass}>Fecha</label>
+              <input
+                type="date"
+                value={dateValue}
+                onChange={e => setEventDate(e.target.value || null)}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Hora de inicio</label>
+              <input
+                type="time"
+                value={kickoffValue}
+                disabled={!dateValue}
+                onChange={e => onKickoffChange(e.target.value)}
+                className={inputClass}
+              />
+              <p className="mt-1.5 text-[11px] font-semibold text-[#8aa397]">
+                {puertas
+                  ? `Puertas a las ${puertas} · la afluencia se mide desde ahí`
+                  : dateValue
+                    ? 'Necesaria para el mapa de afluencia del partido'
+                    : 'Define antes la fecha'}
+              </p>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

@@ -97,7 +97,7 @@ export default function EventAdminPage() {
         </>
       }
     >
-      {tab === 'dashboard' && <EventDashboardTab eventId={eventId} />}
+      {tab === 'dashboard' && <EventDashboardTab eventId={eventId} onIrAGeneral={() => setTab('general')} />}
 
       {tab === 'cantinas' && <EventCantinasHub eventId={eventId} />}
 
@@ -131,6 +131,8 @@ export default function EventAdminPage() {
           setEventName={eventLogic.setEventName}
           eventDate={eventLogic.eventDate}
           setEventDate={eventLogic.setEventDate}
+          kickoffAt={eventLogic.kickoffAt}
+          setKickoffAt={eventLogic.setKickoffAt}
           onSave={eventLogic.saveEvent}
         />
       )}
