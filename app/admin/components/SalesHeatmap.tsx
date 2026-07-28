@@ -34,6 +34,8 @@ const COLOR_FASE: Record<FasePartido, string> = {
 };
 
 interface Props {
+  /** Encabezado. Distingue la curva del evento de la de una barra concreta. */
+  titulo?: string;
   slots: SlotVentas[];
   tramo: Tramo;
   onTramoChange: (t: Tramo) => void;
@@ -41,10 +43,17 @@ interface Props {
   loading: boolean;
   /** Lleva a la pestaña donde se define la hora de inicio. */
   onDefinirKickoff?: () => void;
+  /**
+   * Total de tickets del ámbito (evento o cantina). Sirve para avisar de cuántas
+   * ventas quedan FUERA de la ventana del partido: sin ese aviso, el KPI de
+   * arriba y la suma del gráfico no cuadran y parece un error de cálculo.
+   */
+  totalReferencia?: number;
 }
 
 export default function SalesHeatmap({
-  slots, tramo, onTramoChange, sinKickoff, loading, onDefinirKickoff,
+  titulo = 'Afluencia durante el partido',
+  slots, tramo, onTramoChange, sinKickoff, loading, onDefinirKickoff, totalReferencia,
 }: Props) {
   // La magnitud es el NÚMERO DE TICKETS, no la recaudación: la pregunta que
   // responde esta tarjeta es cuánta gente pasa por la barra, y un tramo de pocos
@@ -73,7 +82,7 @@ export default function SalesHeatmap({
       <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2.5">
           <span className="ms text-xl text-elche-primary">local_fire_department</span>
-          <h3 className="m-0 text-[15px] font-extrabold tracking-tight">Afluencia durante el partido</h3>
+          <h3 className="m-0 text-[15px] font-extrabold tracking-tight">{titulo}</h3>
         </div>
 
         {!sinKickoff && (
@@ -129,6 +138,16 @@ export default function SalesHeatmap({
         </div>
       ) : (
         <>
+          {typeof totalReferencia === 'number' && totalReferencia > totalTickets && (
+            <div className="mb-3 flex items-center gap-2 text-[11.5px] font-semibold text-[#8aa397]">
+              <span className="ms text-sm">info</span>
+              <span>
+                {totalReferencia - totalTickets} de {totalReferencia} ventas quedan fuera
+                de la ventana del partido y no se cuentan aquí
+              </span>
+            </div>
+          )}
+
           {pico && pico.numSales > 0 && (
             <div className="mb-3 flex items-center gap-2 rounded-[10px] bg-[#fff8e8] px-3 py-2">
               <span className="ms text-base text-[#f0a500]">trending_up</span>

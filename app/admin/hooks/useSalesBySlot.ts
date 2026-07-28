@@ -29,9 +29,16 @@ export type Tramo = (typeof TRAMOS_DISPONIBLES)[number];
  *
  * Devuelve `sinKickoff: true` cuando el evento no tiene hora de inicio definida,
  * que es lo que permite a la interfaz pedirla en lugar de mostrar un hueco.
+ *
+ * Con `cantinaId` acota la curva a una barra concreta, que es lo que permite
+ * comparar el comportamiento de una cantina con el del evento entero.
  */
-export function useSalesBySlot(eventId: string | undefined, tramo: Tramo = 15) {
-  const key = ['sales_by_slot', eventId, tramo];
+export function useSalesBySlot(
+  eventId: string | undefined,
+  tramo: Tramo = 15,
+  cantinaId?: string,
+) {
+  const key = ['sales_by_slot', eventId, tramo, cantinaId ?? 'evento'];
 
   const { data = [], isLoading, refetch } = useQuery({
     queryKey: key,
@@ -41,6 +48,7 @@ export function useSalesBySlot(eventId: string | undefined, tramo: Tramo = 15) {
       const { data, error } = await supabase.rpc('get_sales_by_slot', {
         p_event_id: eventId,
         p_slot_minutes: tramo,
+        p_cantina_id: cantinaId ?? null,
       });
       if (error) throw error;
 
@@ -54,7 +62,7 @@ export function useSalesBySlot(eventId: string | undefined, tramo: Tramo = 15) {
     },
   });
 
-  useRealtimeInvalidate(eventId, undefined, ['stock_movements'], key);
+  useRealtimeInvalidate(eventId, cantinaId, ['stock_movements'], key);
 
   return {
     slots: data,

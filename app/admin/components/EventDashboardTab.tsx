@@ -77,6 +77,7 @@ export default function EventDashboardTab({ eventId, onIrAGeneral }: EventDashbo
           onTramoChange={setTramo}
           sinKickoff={sinKickoff}
           loading={cargandoSlots}
+          totalReferencia={kpis.num_sales}
           onDefinirKickoff={onIrAGeneral}
         />
 

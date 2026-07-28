@@ -49,7 +49,10 @@ create or replace function public.get_sales_by_slot(
   p_event_id uuid,
   p_slot_minutes int default 15,
   p_puertas_min int default 90,
-  p_cola_min int default 30
+  p_cola_min int default 30,
+  -- Filtro opcional por barra: permite ver la curva de una cantina concreta y
+  -- compararla con la del evento entero. Sin él, se comporta como antes.
+  p_cantina_id uuid default null
 )
 returns table(
   slot_start timestamptz,
@@ -88,6 +91,7 @@ as $function$
     join public.sales s
       on s.event_id = p_event_id
      and s.status = 'OK'
+     and (p_cantina_id is null or s.cantina_id = p_cantina_id)
      and s.created_at >= r.inicio
      and s.created_at <  r.inicio + (p_slot_minutes * interval '1 minute')
     group by r.minuto
