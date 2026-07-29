@@ -9,6 +9,8 @@ import AdminShell, { AdminNavItem, HeaderIconButton } from '../../../components/
 import EventInventoryTab from '../../../components/EventInventoryTab';
 import CantinaIncidentsPanel from '../../../components/CantinaIncidentsPanel';
 import CantinaWaitersPanel from '../../../components/CantinaWaitersPanel';
+import SalesHeatmap from '../../../components/SalesHeatmap';
+import { useSalesBySlot, type Tramo } from '../../../hooks/useSalesBySlot';
 import CantinaSalesHistory from '../../../components/CantinaSalesHistory';
 import IncidentsBell from '../../../components/IncidentsBell';
 import NotificationBell from '../../../components/NotificationBell';
@@ -37,6 +39,9 @@ export default function CantinaDetailPage() {
   const router = useRouter();
   const params = useParams() as { eventId: string; cantinaId: string };
   const { eventId, cantinaId } = params;
+
+  const [tramo, setTramo] = useState<Tramo>(15);
+  const { slots, sinKickoff, loading: cargandoSlots } = useSalesBySlot(eventId, tramo, cantinaId);
 
   const [cantinaName, setCantinaName] = useState('Cantina');
   const [qrToken, setQrToken] = useState<string | null>(null);
@@ -160,6 +165,24 @@ export default function CantinaDetailPage() {
             value={String(pendingIncidents)}
             fg={pendingIncidents > 0 ? '#d63838' : '#00964f'}
             bg={pendingIncidents > 0 ? 'rgba(239,68,68,.10)' : 'rgba(0,150,79,.10)'}
+          />
+        </div>
+
+        {/* ---------------- Evolución de la afluencia ----------------
+            Va aquí, entre los totales y el detalle operativo, porque cierra la
+            lectura del resultado: los KPIs dicen CUÁNTO vendió esta barra y esta
+            curva dice CÓMO se repartió. A partir de aquí la página baja al
+            trabajo del día (inventario, historial, personal, incidencias). */}
+        <div className="mb-4">
+          <SalesHeatmap
+            titulo="Afluencia en esta cantina"
+            slots={slots}
+            tramo={tramo}
+            onTramoChange={setTramo}
+            sinKickoff={sinKickoff}
+            loading={cargandoSlots}
+            totalReferencia={totals.num_sales}
+            onDefinirKickoff={() => router.push(`/admin/${eventId}?tab=general`)}
           />
         </div>
 

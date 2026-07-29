@@ -56,12 +56,26 @@ export function useAdminEvents() {
     setLoading(false);
   }
 
-  async function createEvent(name: string, date: string, seasonId?: string | null) {
+  async function createEvent(
+    name: string,
+    date: string,
+    seasonId?: string | null,
+    datos?: { kickoffAt?: string | null; opponentId?: string | null; matchType?: string | null },
+  ) {
     if (!name.trim()) throw new Error('Debe introducir un nombre');
 
+    // Hora de inicio, rival y competición se guardan ya en el alta: son los
+    // únicos datos del partido que no se pueden reconstruir después de jugarlo.
     const { data, error } = await supabase
       .from('events')
-      .insert({ name: name.trim(), date: date || null, season_id: seasonId || null })
+      .insert({
+        name: name.trim(),
+        date: date || null,
+        season_id: seasonId || null,
+        kickoff_at: datos?.kickoffAt ?? null,
+        opponent_id: datos?.opponentId ?? null,
+        match_type: datos?.matchType ?? null,
+      })
       .select('id, name, date, status, season_id')
       .single();
 

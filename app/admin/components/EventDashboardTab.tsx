@@ -1,23 +1,26 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useEventDashboard } from '../hooks/useEventDashboard';
-import { useSalesByHour } from '../hooks/useSalesByHour';
+import { useSalesBySlot, type Tramo } from '../hooks/useSalesBySlot';
+import SalesHeatmap from './SalesHeatmap';
 import { useEventWaiterAssignments } from '../hooks/useEventWaiterAssignments';
 import { eur } from '@/lib/adminUi';
 
 interface EventDashboardTabProps {
   eventId: string;
+  /** Lleva a la pestaña General, donde se define la hora de inicio. */
+  onIrAGeneral?: () => void;
 }
 
-export default function EventDashboardTab({ eventId }: EventDashboardTabProps) {
+export default function EventDashboardTab({ eventId, onIrAGeneral }: EventDashboardTabProps) {
   const { kpis, ranking, loading } = useEventDashboard(eventId);
-  const { buckets } = useSalesByHour(eventId);
+  const [tramo, setTramo] = useState<Tramo>(15);
+  const { slots, sinKickoff, loading: cargandoSlots } = useSalesBySlot(eventId, tramo);
   const { waiters } = useEventWaiterAssignments(eventId);
 
   const avgTicket = kpis.num_sales > 0 ? kpis.total_cents / kpis.num_sales : 0;
   const maxRank = ranking.length ? ranking[0].totalCents : 0;
-  const maxHour = Math.max(...buckets.map(b => b.totalCents), 1);
 
   const activeTeam = waiters.filter(w => w.cantinaId);
   const totalWaiters = waiters.length;
@@ -66,40 +69,17 @@ export default function EventDashboardTab({ eventId }: EventDashboardTabProps) {
         </div>
       )}
 
-      {/* ---------------- Ventas por hora + equipo ---------------- */}
+      {/* ---------------- Afluencia durante el partido + equipo ---------------- */}
       <div className="mb-4 grid gap-4 lg:grid-cols-[1.7fr_1fr]">
-        <div className="rounded-2xl border border-elche-gray bg-white p-5">
-          <div className="mb-5 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <span className="ms text-xl text-elche-primary">show_chart</span>
-              <h3 className="m-0 text-[15px] font-extrabold tracking-tight">Ventas por hora</h3>
-            </div>
-            <span className="rounded-md bg-elche-bg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#8aa397]">
-              Recaudación · €
-            </span>
-          </div>
-
-          {buckets.length === 0 ? (
-            <div className="flex h-[190px] flex-col items-center justify-center gap-2 text-elche-text-light">
-              <span className="ms text-4xl text-[#bfe3cf]">bar_chart</span>
-              <span className="text-[12.5px] font-semibold">Aún no hay ventas registradas</span>
-            </div>
-          ) : (
-            <div className="flex h-[190px] items-end gap-3 pt-2.5">
-              {buckets.map(b => (
-                <div key={b.hora} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
-                  <div className="text-[11px] font-bold text-elche-primary">{Math.round(b.totalCents / 100)}€</div>
-                  <div
-                    className="w-full max-w-[46px] rounded-t-lg bg-gradient-to-b from-elche-accent to-elche-primary shadow-[0_3px_10px_rgba(0,150,79,.2)] transition-[height] duration-500"
-                    style={{ height: `${Math.max(6, (b.totalCents / maxHour) * 100)}%` }}
-                    title={`${b.numSales} tickets · ${eur(b.totalCents)}`}
-                  />
-                  <div className="text-[11px] font-semibold text-[#8aa397]">{b.hora}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <SalesHeatmap
+          slots={slots}
+          tramo={tramo}
+          onTramoChange={setTramo}
+          sinKickoff={sinKickoff}
+          loading={cargandoSlots}
+          totalReferencia={kpis.num_sales}
+          onDefinirKickoff={onIrAGeneral}
+        />
 
         {/* Equipo en turno */}
         <div className="rounded-2xl border border-elche-gray bg-white p-5">
