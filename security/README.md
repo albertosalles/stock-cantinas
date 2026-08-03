@@ -99,11 +99,16 @@ si la identidad viaja en el token.
 | Hito | Verde | Total | |
 |---|---:|---:|---|
 | S1 · línea base (2026-07-31) | 32 | 325 | 9,8 % |
-| S2 · credenciales fuera del navegador (2026-08-03) | 39 | 327 | 11,9 % |
+| S2 · credenciales fuera del navegador (2026-08-03) | 41 | 332 | 12,3 % |
 
-El salto de S2 son exactamente las **7 funciones de credenciales** cerradas a
-`anon`. El total sube a 327 porque aparecen `verify_cantina_pin` y
-`set_waiter_pin`.
+El salto de S2 son las **8 funciones de credenciales** cerradas a `anon` (las
+siete del login más `create_waiter`). El total sube porque aparecen
+`verify_cantina_pin`, `set_waiter_pin`, `create_waiter` y la vista
+`v_waiters_admin`.
+
+Sigue casi todo en rojo, y es lo esperado: S2 saca las credenciales del
+navegador, pero **no activa ninguna política**. Las 202 escrituras y las 65
+lecturas las cierran S4 y S5.
 
 ## Cuatro falsos verdes que ya nos ha ahorrado
 

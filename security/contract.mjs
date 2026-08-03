@@ -136,6 +136,12 @@ export const TABLES = [
     why: 'Expone si una cantina tiene credenciales y si están activas: metadato de login, y el '
        + 'login pasa a rutas de servidor en S2.' },
 
+  { name: 'v_waiters_admin', view: true, ...deny,
+    read: { anon: 'none', client: 'none', pos: 'none', admin: 'all' },
+    why: 'Creada en S2 para que el panel sepa si un camarero tiene PIN sin traerse el hash: un '
+       + 'bcrypt de cuatro dígitos se rompe fuera de línea en segundos. Incluye qr_token porque '
+       + 'el admin imprime la acreditación.' },
+
   { name: 'v_event_products_eur', view: true, ...deny,
     read: { anon: 'live_event', client: 'live_event', pos: 'live_event', admin: 'all' } },
 

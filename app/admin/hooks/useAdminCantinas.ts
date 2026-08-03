@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { setCantinaPin } from '@/lib/adminPins';
 
 export interface CantinaRow {
   id: string;
@@ -61,14 +62,10 @@ export function useAdminCantinas(eventId: string) {
 
     if (error) throw error;
 
-    // Set PIN
-    const { error: pinError } = await supabase.rpc('set_cantina_pin', {
-      p_cantina_id: data.id,
-      p_pin_code: pin.trim(),
-      p_is_active: true
-    });
-
-    if (pinError) console.error('Error setting PIN:', pinError);
+    // El PIN se fija por ruta de servidor: set_cantina_pin está revocada al
+    // navegador desde S2. Si falla, la cantina quedaría sin credenciales, así
+    // que el error se propaga en vez de tragarse como antes.
+    await setCantinaPin(data.id, pin);
 
     // Auto-assign to current event
     await supabase

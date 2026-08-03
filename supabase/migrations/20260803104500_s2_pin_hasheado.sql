@@ -128,6 +128,55 @@ end $$;
 comment on function public.set_waiter_pin(uuid, text) is
   'Asigna el PIN personal que elige el admin, guardando sólo su hash. Rechaza el PIN si ya lo tiene otro camarero: identifica por sí solo. PIN vacío se lo quita, y entonces sólo entra con QR.';
 
+-- El alta de camarero pasa a ser UNA operación. Antes era un solo INSERT con el
+-- PIN dentro; al separarlo en «crear» + «fijar PIN» aparecía un hueco: si el
+-- PIN colisionaba, el camarero ya estaba creado y quedaba a medias, sin PIN y
+-- sin que el admin se enterara. Verificado en local: pasó de verdad.
+create or replace function public.create_waiter(p_name text, p_surname text, p_pin text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  v_id uuid;
+begin
+  if p_name is null or btrim(p_name) = '' then
+    raise exception 'El nombre es obligatorio';
+  end if;
+
+  insert into waiters (name, surname)
+  values (btrim(p_name), nullif(btrim(coalesce(p_surname, '')), ''))
+  returning id into v_id;
+
+  -- Misma transacción: si el PIN colisiona o es inválido, el alta se deshace
+  -- entera y no queda ningún camarero suelto.
+  perform set_waiter_pin(v_id, p_pin);
+
+  return v_id;
+end $$;
+
+comment on function public.create_waiter(text, text, text) is
+  'Alta de camarero con su PIN en una sola transacción. Si el PIN falla, no se crea el camarero.';
+
+-- ─── 3 bis. El hash tampoco viaja ────────────────────────────────────────────
+-- El panel de camareros necesita saber si alguien tiene PIN, no cuál es ni su
+-- hash. Un bcrypt de cuatro dígitos se rompe fuera de línea en segundos, así
+-- que mandarlo al navegador sería casi tan malo como mandar el PIN.
+--
+-- OJO: esta vista NO lleva `security_invoker`, igual que las seis anteriores.
+-- Se lo pone S3 junto con las demás; hasta entonces se ejecuta como su
+-- propietario, que es el estado que la matriz sigue marcando en rojo.
+
+create or replace view public.v_waiters_admin as
+  select w.id, w.name, w.surname, w.active, w.qr_token,
+         (w.pin_hash is not null) as has_pin,
+         w.created_at
+  from public.waiters w;
+
+comment on view public.v_waiters_admin is
+  'Camareros para el panel de admin, sin el hash del PIN. Incluye qr_token porque el admin imprime la acreditación.';
+
 -- ─── 4. Verificación contra el hash ──────────────────────────────────────────
 
 create or replace function public.verify_cantina_pin(p_cantina_id uuid, p_pin text)
@@ -267,6 +316,7 @@ begin
     'public.resolve_cantina_qr(uuid)',
     'public.set_cantina_pin(uuid, text, boolean)',
     'public.set_waiter_pin(uuid, text)',
+    'public.create_waiter(text, text, text)',
     'public.toggle_cantina_access(uuid, boolean)'
   ] loop
     execute format('revoke all on function %s from public, anon, authenticated', v_fn);

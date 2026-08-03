@@ -9,6 +9,7 @@ import PinInput from './components/PinInput';
 import ScanStep from './components/ScanStep';
 import WaiterStep from './components/WaiterStep';
 import { DEV_EASY_LOGIN } from '@/lib/devConfig';
+import { setAccessToken } from '@/lib/session';
 
 /** Pasos del flujo de cantina, en el orden en que se recorren. */
 const QR_STEPS = [
@@ -57,14 +58,17 @@ export default function CantinaLoginPage() {
     setAdminError('');
 
     try {
-      const res = await fetch('/api/admin-login', {
+      const res = await fetch('/api/auth/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: adminPassword }),
       });
 
       if (res.ok) {
-        sessionStorage.setItem('admin_authenticated', 'true');
+        // La cookie httpOnly la pone el servidor; aquí sólo se guarda el token
+        // que supabase-js necesita mandar en cada petición.
+        const { token } = await res.json();
+        setAccessToken(token);
         router.push('/admin');
       } else {
         const data = await res.json();

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { setCantinaPin } from '@/lib/adminPins';
 import { useRealtimeInvalidate } from '@/hooks/useEventRealtime';
 
 export interface FeaturedStock { name: string; qty: number; }
@@ -47,7 +48,7 @@ export function useCantinasGrid(eventId: string | undefined) {
     if (!pin.trim()) throw new Error('PIN requerido');
     const { data, error } = await supabase.from('cantinas').insert({ name: name.trim() }).select('id').single();
     if (error) throw error;
-    await supabase.rpc('set_cantina_pin', { p_cantina_id: data.id, p_pin_code: pin.trim(), p_is_active: true });
+    await setCantinaPin(data.id, pin);
     await supabase.from('event_cantinas').insert({ event_id: eventId, cantina_id: data.id });
     await refetch();
   }
