@@ -83,8 +83,14 @@ export const TABLES = [
     forbidden: ['pin_code', 'qr_token'] },
 
   { name: 'cantina_access', ...deny,
-    read: { anon: 'none', client: 'none', pos: 'none', admin: 'none' },
-    why: 'Credenciales. No las lee NADIE desde el navegador, ni el admin: sólo rutas de servidor.' },
+    read: { anon: 'none', client: 'none', pos: 'none', admin: 'all' },
+    why: 'El admin gestiona el acceso de las barras, así que ve la ficha: si hay PIN configurado, '
+       + 'si está activo y cuándo se cambió. Lo que NO viaja nunca es el PIN. Decidido el '
+       + '2026-08-02: se guarda hasheado, y hashear y consultar son excluyentes — un hash no se '
+       + 'deshace. El admin no pierde control, porque es él quien lo fija: el panel enseña el '
+       + 'código UNA vez al generarlo y después sólo dice si está configurado. A cambio, una fuga '
+       + 'de la base ya no entrega los PIN de todas las cantinas.',
+    forbidden: ['pin_code'] },
 
   { name: 'users', ...deny,
     read: { anon: 'none', client: 'none', pos: 'none', admin: 'none' } },
@@ -169,6 +175,10 @@ export const RPC = {
           'set_final_inventory_bulk', 'void_sale'],
 };
 
+// `set_cantina_pin` deja de recibir el código y pasa a GENERARLO y devolverlo
+// una sola vez, ya hasheado en la tabla (S2). Es la única vía por la que el
+// admin conoce un PIN.
+//
 // El login deja de ser accesible desde el navegador: pasa a rutas de servidor
 // con service_role, que es quien valida el PIN y firma el token (S2).
 export const RPC_SOLO_SERVIDOR = ['validate_cantina_access', 'resolve_cantina_qr', 'identify_waiter'];
