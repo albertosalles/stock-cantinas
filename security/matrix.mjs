@@ -21,7 +21,7 @@
 
 import { createHmac } from 'node:crypto';
 import { execSync } from 'node:child_process';
-import { FIXTURE, ROLES, TABLES, RPC, RPC_SOLO_SERVIDOR } from './contract.mjs';
+import { FIXTURE, ROLES, TABLES, RPC, RPC_SOLO_SERVIDOR, RPC_ABIERTAS_A_ANON } from './contract.mjs';
 
 const API = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321';
 const JWT_SECRET = process.env.SUPABASE_JWT_SECRET
@@ -86,7 +86,12 @@ const isDenied = (r) =>
 
 // ─── Comprobaciones de lectura ───────────────────────────────────────────────
 async function checkRead(table, role, scope, totals) {
-  const r = await rest(TOKENS[role], `${table.name}?select=*`);
+  const exento = (table.forbiddenSalvo ?? []).includes(role);
+  // Un `select=*` sobre una tabla con columnas restringidas se deniega entero,
+  // y eso no distingue «columna protegida» de «tabla cerrada». Se pide la lista
+  // legítima y la columna prohibida se sondea aparte.
+  const cols = (!exento && table.columnas) ? table.columnas.join(',') : '*';
+  const r = await rest(TOKENS[role], `${table.name}?select=${cols}`);
   const rows = Array.isArray(r.body) ? r.body : null;
   const total = totals[table.name];
   const eventKey = table.eventKey ?? 'event_id';
@@ -103,9 +108,17 @@ async function checkRead(table, role, scope, totals) {
   if (isDenied(r)) return fail(`denegado, pero debería poder leer (${scope})`);
   if (!rows) return fail(`respuesta inesperada ${r.status}`);
 
-  // Columnas que no deben viajar nunca, aunque la fila sea visible.
-  const leaked = (table.forbidden ?? []).filter((c) => rows.some((row) => c in row));
-  if (leaked.length) return fail(`expone ${leaked.join(', ')}`);
+  // Columnas que no deben viajar, aunque la fila sea visible.
+  if (!exento) {
+    const leaked = (table.forbidden ?? []).filter((c) => rows.some((row) => c in row));
+    if (leaked.length) return fail(`expone ${leaked.join(', ')}`);
+
+    // Y pedirlas explícitamente tiene que fallar: si no, basta con nombrarlas.
+    for (const c of table.forbidden ?? []) {
+      const sonda = await rest(TOKENS[role], `${table.name}?select=${c}`);
+      if (!isDenied(sonda)) return fail(`puede pedir ${c} si lo nombra`);
+    }
+  }
 
   if (scope === 'all') {
     return rows.length === total ? pass(`${rows.length} filas`)
@@ -218,10 +231,15 @@ function checkRpcGrants() {
     const [fn, anonPuede] = linea.split('|');
     const abierto = aBooleano(anonPuede, fn);
     const soloServidor = RPC_SOLO_SERVIDOR.includes(fn);
+    const excepcion = RPC_ABIERTAS_A_ANON.includes(fn);
     return {
       fn, role: 'anon',
-      ok: !abierto,
-      detail: abierto ? (soloServidor ? 'PERMITIDO (debe ser sólo de servidor)' : 'PERMITIDO') : 'denegado',
+      // Las excepciones tienen que estar abiertas de verdad: si una se cerrara
+      // por accidente, el login dejaría de funcionar y conviene enterarse aquí.
+      ok: excepcion ? abierto : !abierto,
+      detail: excepcion ? (abierto ? 'abierta (excepción razonada)' : 'CERRADA, y el login la necesita')
+            : abierto ? (soloServidor ? 'PERMITIDO (debe ser sólo de servidor)' : 'PERMITIDO')
+            : 'denegado',
     };
   });
 }

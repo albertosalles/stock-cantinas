@@ -109,6 +109,7 @@ si la identidad viaja en el token.
 | S1 · línea base (2026-07-31) | 32 | 325 | 9,8 % |
 | S2 · credenciales fuera del navegador (2026-08-03) | 41 | 332 | 12,3 % |
 | S3 · identidad derivada del token (2026-08-03) | 76 | 345 | 22,0 % |
+| S4 · RLS en el catálogo (2026-08-03) | 116 | 346 | 33,5 % |
 
 El salto de S2 son las **8 funciones de credenciales** cerradas a `anon` (las
 siete del login más `create_waiter`). El total sube porque aparecen
@@ -120,9 +121,13 @@ nueva de **escalada de rol**. Sigue casi todo en rojo, y es lo esperado: hasta
 aquí **no se ha activado ni una política**. Las 202 escrituras y las 65 lecturas
 las cierran S4 y S5.
 
-`get_active_events` se queda abierta a `anon` a propósito: la pantalla de login
-la necesita antes de que exista sesión y sólo devuelve los eventos en curso con
-su número de barras, que es lo que el contrato ya permite leer a cualquiera.
+En S4 entran las **primeras políticas de verdad**, sobre las tablas de menor
+riesgo. Lo que queda en rojo es el ledger y las escrituras, que cierra S5.
+
+Las excepciones a «`anon` no ejecuta nada» están listadas en `RPC_ABIERTAS_A_ANON`
+y la matriz comprueba que sigan **abiertas**: si una se cerrara por accidente el
+login dejaría de funcionar, y conviene enterarse aquí y no en el estadio. Son
+`get_active_events` y los helpers `sc_*`.
 
 ## Cuatro falsos verdes que ya nos ha ahorrado
 

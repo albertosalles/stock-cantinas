@@ -18,6 +18,14 @@
 //   subset      Ve algunas filas pero no todas (tablas sin cantina_id propia,
 //               como sale_line_items, que se acota a través de su venta).
 //
+// COLUMNAS. `forbidden` lista columnas que no deben viajar aunque la fila sea
+// visible; `forbiddenSalvo` exceptúa a los roles que sí las necesitan, y
+// `columnas` dice qué pedir en su lugar. Se comprueban las DOS cosas: que la
+// consulta legítima funcione y que pedir la columna prohibida se deniegue. RLS
+// filtra FILAS, así que esto se resuelve con privilegios de columna, y como el
+// TPV y el admin comparten el rol `authenticated`, lo que un GRANT no puede
+// separar acaba pasando por una RPC con guarda.
+//
 // ESCRITURAS
 //   deny        Sin privilegio. El ledger no se escribe directo NUNCA: se
 //               retira el GRANT, no se escribe una política. Sin privilegio no
@@ -56,8 +64,12 @@ export const TABLES = [
 
   { name: 'cantinas', ...deny,
     read: { anon: 'all', client: 'all', pos: 'all', admin: 'all' },
-    why: 'Nombre y ubicación son información de cartel. qr_token NO debe viajar (ver forbidden).',
-    forbidden: ['qr_token'] },
+    why: 'Nombre y ubicación son información de cartel. qr_token NO: es la credencial que abre el '
+       + 'paso 1 del login, así que un camarero que leyera el de otra barra podría pedir sesión '
+       + 'allí. NADIE lo lee de la tabla, tampoco el admin: lo recibe por get_event_cantinas_grid, '
+       + 'que exige admin por dentro. Un GRANT no habría podido separarlos, porque el TPV y el '
+       + 'admin comparten el rol de Postgres `authenticated`.',
+    forbidden: ['qr_token'], columnas: ['id', 'name', 'location'] },
 
   { name: 'event_cantinas', ...deny,
     read: { anon: 'live_event', client: 'live_event', pos: 'live_event', admin: 'all' } },
@@ -188,3 +200,20 @@ export const RPC = {
 // El login deja de ser accesible desde el navegador: pasa a rutas de servidor
 // con service_role, que es quien valida el PIN y firma el token (S2).
 export const RPC_SOLO_SERVIDOR = ['validate_cantina_access', 'resolve_cantina_qr', 'identify_waiter'];
+
+// Excepciones razonadas al «anon no ejecuta nada». Se listan aquí para que sean
+// una decisión visible y no un olvido que la matriz deja pasar.
+//
+//   get_active_events   La pantalla de login la necesita ANTES de que exista
+//                       sesión, y sólo devuelve los eventos en curso con su
+//                       número de barras: lo que el contrato ya permite leer a
+//                       cualquiera.
+//   sc_*                Los helpers que invocan las propias políticas. Una
+//                       política se evalúa CON EL ROL QUE CONSULTA, así que si
+//                       anon no puede ejecutarlos, su consulta falla entera.
+//                       No abren nada: leen el token de quien pregunta, o
+//                       responden si un evento está en curso.
+export const RPC_ABIERTAS_A_ANON = [
+  'get_active_events',
+  'sc_claims', 'sc_app_role', 'sc_es_servicio', 'sc_claim_uuid', 'sc_evento_visible',
+];
