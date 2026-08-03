@@ -117,6 +117,9 @@ export const TABLES = [
     why: 'Los turnos son datos laborales; el TPV sólo ve los de su barra.' },
 
   { name: 'incidents', insert: 'allow_pos', update: 'allow_admin', delete: 'deny',
+    // Conserva el privilegio de escritura, así que el sondeo tiene que ir
+    // contra una fila real para que se note si la política la filtra.
+    sondaReal: `cantina_id=eq.${FIXTURE.CANTINA_A}`,
     read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' },
     why: 'Única escritura directa que se conserva: reportar una incidencia es un aviso, no una '
        + 'transacción de stock, y la política WITH CHECK basta para atarla a su cantina. '

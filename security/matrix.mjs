@@ -152,7 +152,43 @@ async function checkRead(table, role, scope, totals) {
 // devuelve 2xx sin tocar nada, y si no, 4xx. Así el sondeo no altera el fixture.
 // El INSERT no admite ese truco — si pasa, pasa —, por eso las lecturas se
 // ejecutan todas antes que las escrituras.
+//
+// EL PATCH TIENE QUE LLEVAR UN CAMPO REAL. Con el cuerpo vacío, PostgREST
+// devuelve 204 sin llegar a tocar la base, así que la sonda daba SIEMPRE
+// «permitido» y no medía nada: 75 rojos que no eran hallazgos. Con una columna
+// de verdad, un privilegio retirado responde 42501 como debe.
 const NADIE = '00000000-0000-4000-8000-999999999999';
+
+// Clave por la que se filtra el sondeo. Por defecto un id inexistente, para no
+// tocar el fixture. Las tablas que CONSERVAN el privilegio de escritura —las
+// incidencias— necesitan apuntar a una fila real: con el privilegio puesto, un
+// UPDATE que no encuentra nada devuelve 2xx igual que uno permitido, y no se
+// distinguiría «lo filtró la política» de «no había fila».
+const filtro = (table) => {
+  if (table.sondaReal) return table.sondaReal;
+  const clave = table.name === 'cantina_stock' || table.name === 'cantina_access' ? 'cantina_id' : 'id';
+  return `${clave}=eq.${NADIE}`;
+};
+
+const PATCH_PAYLOAD = {
+  events: { name: 'sonda' },
+  cantinas: { name: 'sonda' },
+  event_cantinas: { cantina_id: FIXTURE.CANTINA_B },
+  products: { name: 'sonda' },
+  event_products: { price_cents: 1 },
+  seasons: { name: 'sonda' },
+  opponents: { name: 'sonda' },
+  waiters: { name: 'sonda' },
+  cantina_access: { is_active: false },
+  users: { name: 'sonda' },
+  shifts: { hours: 1 },
+  incidents: { description: 'sonda' },
+  sales: { total_cents: 1 },
+  sale_line_items: { qty: 1 },
+  stock_movements: { reason: 'sonda' },
+  cantina_stock: { qty: 1 },
+  inventory_snapshots: { qty: 1 },
+};
 
 const INSERT_PAYLOAD = {
   events: { name: 'INTRUSO', date: '2026-09-01T00:00:00Z', status: 'draft' },
@@ -163,7 +199,7 @@ const INSERT_PAYLOAD = {
   seasons: { name: 'INTRUSA' },
   opponents: { name: 'INTRUSO' },
   waiters: { name: 'INTRUSO' },
-  cantina_access: { cantina_id: FIXTURE.CANTINA_A, pin_code: '0000' },
+  cantina_access: { cantina_id: FIXTURE.CANTINA_B, pin_hash: 'x' },
   users: { email: 'intruso@local.test' },
   shifts: { waiter_id: FIXTURE.WAITER_A, cantina_id: FIXTURE.CANTINA_B, event_id: FIXTURE.EVENT_LIVE },
   incidents: { event_id: FIXTURE.EVENT_LIVE, cantina_id: FIXTURE.CANTINA_A, type: 'OTHER', description: 'sonda' },
@@ -185,15 +221,20 @@ async function checkWrite(table, role, op, rule) {
     if (!payload) return null;
     r = await rest(TOKENS[role], table.name, { method: 'POST', body: JSON.stringify(payload) });
   } else if (op === 'update') {
-    const key = table.name === 'cantina_stock' ? 'cantina_id' : 'id';
-    r = await rest(TOKENS[role], `${table.name}?${key}=eq.${NADIE}`,
-      { method: 'PATCH', body: JSON.stringify({}) });
+    const parche = PATCH_PAYLOAD[table.name];
+    if (!parche) return null;
+    r = await rest(TOKENS[role], `${table.name}?${filtro(table)}`,
+      { method: 'PATCH', body: JSON.stringify(parche), headers: { Prefer: 'return=representation' } });
   } else {
-    const key = table.name === 'cantina_stock' ? 'cantina_id' : 'id';
-    r = await rest(TOKENS[role], `${table.name}?${key}=eq.${NADIE}`, { method: 'DELETE' });
+    r = await rest(TOKENS[role], `${table.name}?${filtro(table)}`,
+      { method: 'DELETE', headers: { Prefer: 'return=representation' } });
   }
 
-  const denegado = isDenied(r);
+  // Cuando el sondeo va contra una fila REAL, un 2xx que no devuelve nada
+  // significa que la política lo filtró: hay privilegio pero no alcance.
+  const vacio = Array.isArray(r.body) && r.body.length === 0;
+
+  const denegado = isDenied(r) || (op !== 'insert' && table.sondaReal && vacio);
   if (permitido) {
     return denegado ? { ok: false, detail: `denegado, debería poder ${op}` }
                     : { ok: true, detail: `permitido (${r.status})` };

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { adminOp } from '@/lib/adminData';
 
 export function useAdminEvent(eventId: string) {
   const queryClient = useQueryClient();
@@ -34,15 +35,10 @@ export function useAdminEvent(eventId: string) {
   }
 
   async function saveEvent() {
-    const { error } = await supabase
-      .from('events')
-      .update({
-        name: eventName, date: eventDate, kickoff_at: kickoffAt,
-        opponent_id: opponentId, match_type: matchType,
-      })
-      .eq('id', eventId);
-
-    if (error) throw error;
+    await adminOp('evento.actualizar', {
+      id: eventId, name: eventName, date: eventDate,
+      kickoffAt, opponentId, matchType,
+    });
 
     // Cambiar la hora de inicio redefine la ventana del partido, así que el mapa
     // de afluencia deja de ser válido. Sin esta invalidación el gráfico seguía

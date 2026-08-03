@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { adminOp } from '@/lib/adminData';
 import { setCantinaPin } from '@/lib/adminPins';
 import { useRealtimeInvalidate } from '@/hooks/useEventRealtime';
 
@@ -36,9 +37,9 @@ export function useCantinasGrid(eventId: string | undefined) {
 
   async function toggleAssign(cantinaId: string, assign: boolean) {
     if (assign) {
-      await supabase.from('event_cantinas').insert({ event_id: eventId, cantina_id: cantinaId });
+      await adminOp('cantina.asignar', { eventId, cantinaId, asignar: true });
     } else {
-      await supabase.from('event_cantinas').delete().match({ event_id: eventId, cantina_id: cantinaId });
+      await adminOp('cantina.asignar', { eventId, cantinaId, asignar: false });
     }
     await refetch();
   }
@@ -46,10 +47,9 @@ export function useCantinasGrid(eventId: string | undefined) {
   async function createCantina(name: string, pin: string) {
     if (!name.trim()) throw new Error('Nombre requerido');
     if (!pin.trim()) throw new Error('PIN requerido');
-    const { data, error } = await supabase.from('cantinas').insert({ name: name.trim() }).select('id').single();
-    if (error) throw error;
+    const data = await adminOp<{ id: string }>('cantina.crear', { name });
     await setCantinaPin(data.id, pin);
-    await supabase.from('event_cantinas').insert({ event_id: eventId, cantina_id: data.id });
+    await adminOp('cantina.asignar', { eventId, cantinaId: data.id, asignar: true });
     await refetch();
   }
 

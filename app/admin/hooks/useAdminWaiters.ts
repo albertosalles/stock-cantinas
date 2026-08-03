@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { createWaiter as altaCamarero } from '@/lib/adminPins';
+import { adminOp } from '@/lib/adminData';
 
 export interface WaiterRow {
   id: string;
@@ -52,8 +53,7 @@ export function useAdminWaiters() {
   }
 
   async function toggleActive(id: string, active: boolean) {
-    const { error } = await supabase.from('waiters').update({ active }).eq('id', id);
-    if (error) throw error;
+    await adminOp('camarero.activo', { id, active });
     setWaiters(ws => ws.map(w => w.id === id ? { ...w, active } : w));
   }
 

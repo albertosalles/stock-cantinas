@@ -111,6 +111,7 @@ si la identidad viaja en el token.
 | S3 · identidad derivada del token (2026-08-03) | 76 | 345 | 22,0 % |
 | S4 · RLS en el catálogo (2026-08-03) | 116 | 346 | 33,5 % |
 | S5a · RLS en el ledger, lecturas (2026-08-03) | 203 | 345 | 58,8 % |
+| **S5b · escrituras retiradas (2026-08-03)** | **345** | **345** | **100 %** |
 
 El salto de S2 son las **8 funciones de credenciales** cerradas a `anon` (las
 siete del login más `create_waiter`). El total sube porque aparecen
@@ -130,13 +131,21 @@ deja de recibir los movimientos de la barra de al lado porque lo impide la
 política, no porque el cliente filtre. Lo único que queda en rojo son las 142
 escrituras, que cierra la segunda mitad de S5.
 
-> **Limitación conocida del sondeo de escritura.** `UPDATE` y `DELETE` se prueban
-> contra un id inexistente, y bajo RLS eso devuelve 200 con cero filas tanto si
-> el rol podría escribir como si no. El sondeo los da por PERMITIDOS, así que
-> **el marcador se equivoca hacia el rojo**: hay escrituras ya bloqueadas por
-> ausencia de política que siguen contando como fallo. Se resuelve solo en la
-> segunda mitad de S5, cuando se retiren los GRANT y la respuesta pase a ser un
-> 403 limpio. Equivocarse hacia el rojo es aceptable; hacia el verde no.
+Con S5b se retiran los GRANT de escritura y **la matriz queda entera en verde**.
+
+## Por qué creerse el 100 %
+
+Un salto de 15 rojos a cero es exactamente el patrón que ha producido cuatro
+falsos verdes en este arnés, así que el 100 % se comprobó **metiendo agujeros a
+propósito** y viendo si la matriz los caza:
+
+| Agujero introducido | Resultado |
+|---|---|
+| `grant update on events to anon` | 344/345 · `events/anon/update: PERMITIDO (200)` |
+| Política de `sales` abierta a todos | 3 hallazgos: `anon` ve 6 filas, `client` ve 6, `pos` ve las de otra cantina |
+
+Restaurados los dos, vuelve a 345/345. Una matriz que no falla cuando debe no
+está midiendo: esta comprobación es la que sostiene el número, no el número.
 
 Las excepciones a «`anon` no ejecuta nada» están listadas en `RPC_ABIERTAS_A_ANON`
 y la matriz comprueba que sigan **abiertas**: si una se cerrara por accidente el
