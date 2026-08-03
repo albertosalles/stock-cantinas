@@ -77,16 +77,24 @@ eso todas las lecturas se ejecutan antes que las escrituras y conviene pasar
 rol sí tenía acceso. Confundirlos daría verdes falsos en cuanto un payload de
 sonda estuviera mal formado.
 
-## Dos comprobaciones que no son sobre RLS
+## Tres comprobaciones que no son sobre RLS
 
-Están aparte porque **ninguna política las arreglaría**, y son las que sostienen
-las decisiones de la fase:
+Están aparte porque **ninguna política las arreglaría** — las tres atraviesan
+funciones `SECURITY DEFINER`, que se saltan el RLS por definición — y son las
+que sostienen las decisiones de la fase:
 
 **Suplantación.** El camarero de la Cantina Norte llama a `create_sale` con la
 cantina de la Sur y el id de otro camarero. Hoy la venta se crea. `create_sale`
 es `SECURITY DEFINER`, así que se salta el RLS por definición y se fía de sus
 argumentos: se puede activar RLS en las 17 tablas y esto seguiría pasando. Lo
 arregla **S3**, quitando esos parámetros de la firma.
+
+**Escalada de rol.** El TPV y el admin comparten el rol de Postgres
+`authenticated`: la diferencia vive en `app_role`, así que un `GRANT` no puede
+separarlos. Sin una guarda dentro de la función, un token de TPV llama a
+`get_event_dashboard` y lee la facturación del evento entero. Se comprueban las
+dos mitades: que el TPV no pueda **y que el admin sí** — si no, una función rota
+para todo el mundo pasaría por «bien protegida».
 
 **Realtime.** Un TPV se suscribe a `stock_movements` y se insertan dos
 movimientos, uno en su barra y otro en la ajena. Debe recibir el primero y no el
@@ -100,15 +108,21 @@ si la identidad viaja en el token.
 |---|---:|---:|---|
 | S1 · línea base (2026-07-31) | 32 | 325 | 9,8 % |
 | S2 · credenciales fuera del navegador (2026-08-03) | 41 | 332 | 12,3 % |
+| S3 · identidad derivada del token (2026-08-03) | 76 | 345 | 22,0 % |
 
 El salto de S2 son las **8 funciones de credenciales** cerradas a `anon` (las
 siete del login más `create_waiter`). El total sube porque aparecen
 `verify_cantina_pin`, `set_waiter_pin`, `create_waiter` y la vista
 `v_waiters_admin`.
 
-Sigue casi todo en rojo, y es lo esperado: S2 saca las credenciales del
-navegador, pero **no activa ninguna política**. Las 202 escrituras y las 65
-lecturas las cierran S4 y S5.
+En S3 caen la **suplantación**, 36 de 37 RPC cerradas a `anon` y una sección
+nueva de **escalada de rol**. Sigue casi todo en rojo, y es lo esperado: hasta
+aquí **no se ha activado ni una política**. Las 202 escrituras y las 65 lecturas
+las cierran S4 y S5.
+
+`get_active_events` se queda abierta a `anon` a propósito: la pantalla de login
+la necesita antes de que exista sesión y sólo devuelve los eventos en curso con
+su número de barras, que es lo que el contrato ya permite leer a cualquiera.
 
 ## Cuatro falsos verdes que ya nos ha ahorrado
 

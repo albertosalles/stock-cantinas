@@ -252,6 +252,45 @@ async function checkSuplantacion() {
   };
 }
 
+// ─── Escalada de rol ─────────────────────────────────────────────────────────
+// El TPV y el admin comparten el rol de Postgres `authenticated`: la diferencia
+// vive en `app_role`, así que un GRANT no puede separarlos. Sin una guarda
+// dentro de la función, un token de TPV llama a get_event_dashboard y lee la
+// facturación del evento entero, saltándose el acotado por cantina.
+//
+// Y como son SECURITY DEFINER, esto NO lo arreglaría el RLS de S5. Por eso va
+// junto a la suplantación y no en la tabla de lecturas.
+const RPC_DE_ADMIN = [
+  ['get_event_dashboard', { p_event_id: FIXTURE.EVENT_LIVE }],
+  ['get_event_cantinas_grid', { p_event_id: FIXTURE.EVENT_LIVE }],
+  ['get_event_waiter_performance', { p_event_id: FIXTURE.EVENT_LIVE }],
+  ['get_sales_by_hour', { p_event_id: FIXTURE.EVENT_LIVE }],
+  ['get_stock_alerts', { p_event_id: FIXTURE.EVENT_LIVE }],
+  ['rebuild_cantina_stock', {}],
+];
+
+async function checkEscalada() {
+  const resultados = [];
+  for (const [fn, args] of RPC_DE_ADMIN) {
+    const rPos = await rest(TOKENS.pos, `rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
+    const bloqueado = rPos.status >= 400;
+
+    // La otra mitad: el admin SÍ tiene que poder. Sin comprobarlo, una función
+    // rota para todo el mundo pasaría por «bien protegida».
+    const rAdmin = await rest(TOKENS.admin, `rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
+    const adminOk = rAdmin.status < 400;
+
+    resultados.push({
+      fn,
+      ok: bloqueado && adminOk,
+      detail: !bloqueado ? `el TPV la ejecuta (${rPos.status})`
+            : !adminOk  ? `bloqueada también para el admin (${rAdmin.status})`
+            : 'sólo admin',
+    });
+  }
+  return resultados;
+}
+
 // ─── Realtime ────────────────────────────────────────────────────────────────
 // La razón por la que el ADR eligió el JWT propio: postgres_changes aplica RLS
 // con el token de la conexión, así que esto sólo puede quedar en verde si la
@@ -407,6 +446,13 @@ async function main() {
   console.log('\n\x1b[1mSUPLANTACIÓN\x1b[0m  (lo que el RLS no puede arreglar)');
   const sup = registrar('suplantación', 'create_sale en cantina ajena', await checkSuplantacion());
   console.log(`  ${ICONO(sup.ok)} venta en otra cantina y a nombre de otro camarero: ${sup.detail}`);
+
+  console.log('\n\x1b[1mESCALADA DE ROL\x1b[0m  (el TPV no puede hacer de admin)');
+  const esc = await checkEscalada();
+  for (const e of esc) registrar('escalada', e.fn, e);
+  const escMal = esc.filter((e) => !e.ok);
+  console.log(`  ${ICONO(escMal.length === 0)} ${esc.length - escMal.length}/${esc.length} RPC de administración fuera del alcance del TPV`);
+  if (escMal.length && VERBOSE) escMal.forEach((e) => console.log(`      ${e.fn}: ${e.detail}`));
 
   console.log('\n\x1b[1mREALTIME\x1b[0m  (el motivo del JWT propio)');
   const rt = registrar('realtime', 'fuga entre cantinas', await checkRealtime());

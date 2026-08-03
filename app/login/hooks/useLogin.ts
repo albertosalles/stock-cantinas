@@ -83,13 +83,13 @@ export function useLogin() {
 
   async function loadCantinas(eventId: string) {
     try {
-      const { data, error } = await supabase
-        .from('v_available_cantinas')
-        .select('*')
-        .eq('event_id', eventId);
-
-      if (error) throw error;
-      setCantinas(data || []);
+      // Por ruta de servidor: v_available_cantinas dice también si la barra
+      // tiene credenciales y si están activas, y eso es del admin. Aquí sólo
+      // hacen falta el nombre y la ubicación.
+      const res = await fetch(`/api/auth/cantina?eventId=${encodeURIComponent(eventId)}`);
+      const datos = await res.json();
+      if (!res.ok) throw new Error(datos.error ?? 'Error');
+      setCantinas(datos.cantinas ?? []);
     } catch (e: any) {
       console.error('Error loading cantinas:', e);
       setError('No se pudieron cargar las cantinas');

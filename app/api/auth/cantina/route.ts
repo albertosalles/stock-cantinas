@@ -15,6 +15,31 @@ import { signCantinaGrant } from '@/lib/authToken';
 // podría pedir un token para la barra que quisiera.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Cantinas de un evento en vivo, para la pantalla de login.
+ *
+ * Va por aquí y no leyendo `v_available_cantinas` desde el navegador porque esa
+ * vista dice además si la barra tiene credenciales y si están activas: metadato
+ * de acceso que el contrato reserva al admin. Aquí sólo salen nombre y
+ * ubicación, que es lo que hay escrito en el cartel de la barra.
+ */
+export async function GET(request: Request) {
+  const eventId = new URL(request.url).searchParams.get('eventId');
+  if (!eventId) return NextResponse.json({ error: 'Falta el evento' }, { status: 400 });
+
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from('v_available_cantinas')
+      .select('event_id, event_name, cantina_id, cantina_name, cantina_location')
+      .eq('event_id', eventId);
+    if (error) throw error;
+    return NextResponse.json({ cantinas: data ?? [] });
+  } catch (e) {
+    console.error('auth/cantina GET:', e);
+    return NextResponse.json({ error: 'No se pudieron cargar las cantinas' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   let cuerpo: { qrToken?: string; eventId?: string; cantinaId?: string; pin?: string };
   try {
