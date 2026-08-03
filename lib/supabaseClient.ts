@@ -1,8 +1,32 @@
 import { createClient } from '@supabase/supabase-js';
 import { getAccessToken, onAccessTokenChange } from '@/lib/session';
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+/**
+ * En desarrollo, la URL de Supabase apunta a 127.0.0.1, que se hornea en el
+ * bundle. Si la app se abre desde otro dispositivo de la red —el móvil, por la
+ * IP del ordenador—, ese 127.0.0.1 es el propio móvil y no hay nada ahí: la
+ * pantalla de login dice «no se pudieron cargar los eventos activos».
+ *
+ * Se resuelve tomando el host por el que se ha llegado. Sólo en desarrollo y
+ * sólo cuando la URL configurada es local: en producción no se toca nada, que
+ * sería reescribir a dónde va la aplicación en función de la barra de
+ * direcciones.
+ */
+function urlSupabase(): string {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  if (typeof window === 'undefined' || process.env.NODE_ENV === 'production') return base;
+
+  const u = new global.URL(base);
+  const esLocal = u.hostname === '127.0.0.1' || u.hostname === 'localhost';
+  if (!esLocal || window.location.hostname === u.hostname) return base;
+
+  u.hostname = window.location.hostname;
+  return u.toString().replace(/\/$/, '');
+}
+
+const URL = urlSupabase();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Desde S2 el cliente viaja con el token que emitió la ruta de login, no con la
