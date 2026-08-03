@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
+import BotonRegistrarPasskey from '@/components/BotonRegistrarPasskey';
 
 export interface AdminNavItem {
   key: string;
@@ -176,6 +177,11 @@ export default function AdminShell({
             <span className="ms shrink-0 text-xl">{collapsed ? 'chevron_right' : 'chevron_left'}</span>
             {!collapsed && <span className="whitespace-nowrap">Colapsar</span>}
           </button>
+          {!collapsed && (
+            <div className="[&_button]:!text-[#e9fff0]/[0.55] [&_button:hover]:!bg-white/[0.06] [&_button:hover]:!text-white [&_button]:!border-none [&_button]:!bg-transparent">
+              <BotonRegistrarPasskey compacto />
+            </div>
+          )}
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13px] font-semibold text-[#e9fff0]/[0.55] transition-colors hover:bg-white/[0.06] hover:text-white"
