@@ -23,7 +23,7 @@ export function useAdminWaiters() {
   async function fetchWaiters() {
     setLoading(true);
     const [wRes, sRes] = await Promise.all([
-      supabase.from('v_waiters_admin').select('id, name, surname, active, qr_token, has_pin').order('name'),
+      supabase.rpc('get_waiters_admin'),
       supabase.from('shifts').select('waiter_id, hours, ended_at'),
     ]);
 

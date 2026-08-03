@@ -110,6 +110,7 @@ si la identidad viaja en el token.
 | S2 · credenciales fuera del navegador (2026-08-03) | 41 | 332 | 12,3 % |
 | S3 · identidad derivada del token (2026-08-03) | 76 | 345 | 22,0 % |
 | S4 · RLS en el catálogo (2026-08-03) | 116 | 346 | 33,5 % |
+| S5a · RLS en el ledger, lecturas (2026-08-03) | 203 | 345 | 58,8 % |
 
 El salto de S2 son las **8 funciones de credenciales** cerradas a `anon` (las
 siete del login más `create_waiter`). El total sube porque aparecen
@@ -122,7 +123,20 @@ aquí **no se ha activado ni una política**. Las 202 escrituras y las 65 lectur
 las cierran S4 y S5.
 
 En S4 entran las **primeras políticas de verdad**, sobre las tablas de menor
-riesgo. Lo que queda en rojo es el ledger y las escrituras, que cierra S5.
+riesgo.
+
+Con S5a **todas las lecturas quedan en verde**, y con ellas **Realtime**: un TPV
+deja de recibir los movimientos de la barra de al lado porque lo impide la
+política, no porque el cliente filtre. Lo único que queda en rojo son las 142
+escrituras, que cierra la segunda mitad de S5.
+
+> **Limitación conocida del sondeo de escritura.** `UPDATE` y `DELETE` se prueban
+> contra un id inexistente, y bajo RLS eso devuelve 200 con cero filas tanto si
+> el rol podría escribir como si no. El sondeo los da por PERMITIDOS, así que
+> **el marcador se equivoca hacia el rojo**: hay escrituras ya bloqueadas por
+> ausencia de política que siguen contando como fallo. Se resuelve solo en la
+> segunda mitad de S5, cuando se retiren los GRANT y la respuesta pase a ser un
+> 403 limpio. Equivocarse hacia el rojo es aceptable; hacia el verde no.
 
 Las excepciones a «`anon` no ejecuta nada» están listadas en `RPC_ABIERTAS_A_ANON`
 y la matriz comprueba que sigan **abiertas**: si una se cerrara por accidente el

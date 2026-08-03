@@ -12,9 +12,11 @@
 //   none        No debe ver NADA: se espera 4xx, o 2xx con cero filas.
 //   all         Ve todas las filas que existen.
 //   live_event  Sólo el evento en curso (nunca el histórico cerrado).
-//   own_cantina Sólo su barra. Se comprueba que TODAS las filas son suyas y
-//               que ve MENOS que el total: con una sola cantina, «ve lo suyo»
-//               y «lo ve todo» darían el mismo resultado.
+//   own_cantina Sólo su barra Y su evento. Una barra trabaja en varios
+//               partidos, así que filtrar sólo por cantina dejaría al camarero
+//               de hoy leyendo el histórico de jornadas anteriores. Se comprueba
+//               además que vea MENOS que el total: con una sola cantina, «ve lo
+//               suyo» y «lo ve todo» darían el mismo resultado.
 //   subset      Ve algunas filas pero no todas (tablas sin cantina_id propia,
 //               como sale_line_items, que se acota a través de su venta).
 //
@@ -92,7 +94,8 @@ export const TABLES = [
   { name: 'waiters', ...deny,
     read: { anon: 'none', client: 'none', pos: 'all', admin: 'all' },
     why: 'El TPV necesita nombres para atribuir la venta, nunca los secretos.',
-    forbidden: ['pin_code', 'pin_hash', 'qr_token'] },
+    forbidden: ['pin_hash', 'qr_token'],
+    columnas: ['id', 'name', 'surname', 'active', 'created_at'] },
 
   { name: 'cantina_access', ...deny,
     read: { anon: 'none', client: 'none', pos: 'none', admin: 'all' },
@@ -102,72 +105,68 @@ export const TABLES = [
        + 'el código, tanto el de cantina como el de camarero (2026-08-03); lo único que pierde es '
        + 'consultarlo después, y si se le olvida vuelve a fijarlo. A cambio, una fuga de la base '
        + 'ya no entrega los PIN de todas las cantinas.',
-    forbidden: ['pin_code', 'pin_hash'] },
+    forbidden: ['pin_hash'],
+    columnas: ['cantina_id', 'is_active', 'created_at', 'updated_at'] },
 
   { name: 'users', ...deny,
     read: { anon: 'none', client: 'none', pos: 'none', admin: 'none' } },
 
   // ─── Operativa y ledger (S5) ──────────────────────────────────────────────
   { name: 'shifts', ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' },
     why: 'Los turnos son datos laborales; el TPV sólo ve los de su barra.' },
 
   { name: 'incidents', insert: 'allow_pos', update: 'allow_admin', delete: 'deny',
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' },
     why: 'Única escritura directa que se conserva: reportar una incidencia es un aviso, no una '
        + 'transacción de stock, y la política WITH CHECK basta para atarla a su cantina. '
        + 'Resolverla es del admin.' },
 
   { name: 'sales', ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' },
     why: 'Facturación. Un TPV no ve el agregado del evento ni lo de otras barras. El cliente '
        + 'verá SUS pedidos cuando exista el rol en F2.5; hoy, nada.' },
 
   { name: 'sale_line_items', ...deny,
-    read: { anon: 'none', client: 'none', pos: 'subset', admin: 'subset' },
+    read: { anon: 'none', client: 'none', pos: 'subset', admin: 'all' },
     why: 'No tiene cantina_id: se acota a través de su venta.' },
 
   { name: 'stock_movements', ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' },
     why: 'El ledger es la fuente de verdad. Además es la tabla publicada en Realtime, así que '
        + 'esta política es la que convierte el filtro por cantina de F1.5 en frontera de seguridad.' },
 
   { name: 'cantina_stock', ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' },
     why: 'El cliente NO debe ver qty: necesita saber si hay cerveza, no cuántas quedan. La '
        + 'disponibilidad se expone como booleano por vista o RPC (S4).' },
 
   { name: 'inventory_snapshots', ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' } },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' } },
 
   // ─── Vistas: la puerta trasera del RLS (S3) ───────────────────────────────
   // Ninguna tiene security_invoker, así que hoy se ejecutan como su propietario
   // y devolverían todo aunque las tablas de debajo estuvieran protegidas.
   { name: 'v_available_cantinas', view: true, ...deny,
-    read: { anon: 'none', client: 'none', pos: 'none', admin: 'all' },
-    why: 'Expone si una cantina tiene credenciales y si están activas: metadato de login, y el '
-       + 'login pasa a rutas de servidor en S2.' },
-
-  { name: 'v_waiters_admin', view: true, ...deny,
-    read: { anon: 'none', client: 'none', pos: 'none', admin: 'all' },
-    why: 'Creada en S2 para que el panel sepa si un camarero tiene PIN sin traerse el hash: un '
-       + 'bcrypt de cuatro dígitos se rompe fuera de línea en segundos. Incluye qr_token porque '
-       + 'el admin imprime la acreditación.' },
+    read: { anon: 'none', client: 'none', pos: 'none', admin: 'none' },
+    why: 'Expone si una cantina tiene credenciales y si están activas. Desde S3 sólo la usa la '
+       + 'ruta de login, que va con service_role, así que NINGÚN cliente necesita alcanzarla — '
+       + 'tampoco el admin. Es de servidor y punto.' },
 
   { name: 'v_event_products_eur', view: true, ...deny,
     read: { anon: 'live_event', client: 'live_event', pos: 'live_event', admin: 'all' } },
 
   { name: 'v_cantina_inventory', view: true, ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' } },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' } },
 
   { name: 'v_inventory_current', view: true, ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' } },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' } },
 
   { name: 'v_sales_by_cantina', view: true, ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' } },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' } },
 
   { name: 'v_sold_by_cantina_product', view: true, ...deny,
-    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'live_event' } },
+    read: { anon: 'none', client: 'none', pos: 'own_cantina', admin: 'all' } },
 ];
 
 // ─── Privilegio EXECUTE sobre las RPC ────────────────────────────────────────
@@ -216,4 +215,5 @@ export const RPC_SOLO_SERVIDOR = ['validate_cantina_access', 'resolve_cantina_qr
 export const RPC_ABIERTAS_A_ANON = [
   'get_active_events',
   'sc_claims', 'sc_app_role', 'sc_es_servicio', 'sc_claim_uuid', 'sc_evento_visible',
+  'sc_alcance_cantina', 'sc_venta_visible',
 ];

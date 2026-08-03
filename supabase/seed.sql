@@ -45,7 +45,12 @@ insert into public.cantinas (id, name, location, qr_token) values
 
 insert into public.event_cantinas (event_id, cantina_id) values
   ('e7e70000-0000-4000-8000-000000000001', 'ca00a000-0000-4000-8000-00000000000a'),
-  ('e7e70000-0000-4000-8000-000000000001', 'ca00b000-0000-4000-8000-00000000000b');
+  ('e7e70000-0000-4000-8000-000000000001', 'ca00b000-0000-4000-8000-00000000000b'),
+  -- La Norte trabajó tambien en el evento YA CERRADO. Es la asimetria que hace
+  -- medible la diferencia entre «ve su barra» y «ve su barra en SU evento»: sin
+  -- esto, una politica que filtrara solo por cantina pasaria por correcta
+  -- mientras deja ver el historico de partidos anteriores.
+  ('e7e70000-0000-4000-8000-000000000002', 'ca00a000-0000-4000-8000-00000000000a');
 
 insert into public.products (id, sku, name, unit, category) values
   ('9c0d0000-0000-4000-8000-000000000001', 1, 'Cerveza',   'ud', 'Bebida'),
@@ -53,6 +58,7 @@ insert into public.products (id, sku, name, unit, category) values
   ('9c0d0000-0000-4000-8000-000000000003', 3, 'Bocadillo', 'ud', 'Comida');
 
 insert into public.event_products (event_id, product_id, price_cents, active, low_stock_threshold, sort_order, featured) values
+  ('e7e70000-0000-4000-8000-000000000002', '9c0d0000-0000-4000-8000-000000000001', 280, true, 20, 1, false),
   ('e7e70000-0000-4000-8000-000000000001', '9c0d0000-0000-4000-8000-000000000001', 300, true, 20, 1, true),
   ('e7e70000-0000-4000-8000-000000000001', '9c0d0000-0000-4000-8000-000000000002', 150, true,  0, 2, false),
   ('e7e70000-0000-4000-8000-000000000001', '9c0d0000-0000-4000-8000-000000000003', 450, true, 10, 3, false);
@@ -130,6 +136,20 @@ select public.create_sale(
   'e7e70000-0000-4000-8000-000000000001', 'ca00b000-0000-4000-8000-00000000000b',
   null, '[{"productId":"9c0d0000-0000-4000-8000-000000000003","qty":2}]'::jsonb,
   'bbbb0000-0000-4000-8000-000000000003', false, '3a17e000-0000-4000-8000-00000000000b');
+
+-- Una venta en el evento CERRADO, en la misma barra Norte. El TPV no debe
+-- verla: es su cantina, pero no es su evento.
+select public.set_initial_inventory_bulk(
+  'e7e70000-0000-4000-8000-000000000002',
+  'ca00a000-0000-4000-8000-00000000000a',
+  '55e50000-0000-4000-8000-000000000001',
+  '[{"productId":"9c0d0000-0000-4000-8000-000000000001","qty":30}]'::jsonb
+);
+
+select public.create_sale(
+  'e7e70000-0000-4000-8000-000000000002', 'ca00a000-0000-4000-8000-00000000000a',
+  null, '[{"productId":"9c0d0000-0000-4000-8000-000000000001","qty":5}]'::jsonb,
+  'cccc0000-0000-4000-8000-000000000001', false, '3a17e000-0000-4000-8000-00000000000a');
 
 -- La invariante debe seguir intacta después del fixture.
 do $$

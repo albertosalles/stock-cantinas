@@ -137,6 +137,9 @@ async function checkRead(table, role, scope, totals) {
   if (scope === 'own_cantina') {
     const ajenas = rows.filter((row) => row.cantina_id !== FIXTURE.CANTINA_A);
     if (ajenas.length) return fail(`${ajenas.length} filas de otra cantina`);
+    // Su barra pero de OTRO partido tampoco: el histórico no es suyo.
+    const otroEvento = rows.filter((row) => 'event_id' in row && row[eventKey] !== FIXTURE.EVENT_LIVE);
+    if (otroEvento.length) return fail(`${otroEvento.length} filas de otro evento en su misma barra`);
     if (rows.length === 0) return fail('no ve ni su propia cantina');
     if (rows.length === total) return fail(`ve las ${total} filas: el filtro por cantina no actúa`);
     return pass(`${rows.length} de ${total}, sólo su cantina`);
