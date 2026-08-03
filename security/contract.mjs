@@ -80,17 +80,17 @@ export const TABLES = [
   { name: 'waiters', ...deny,
     read: { anon: 'none', client: 'none', pos: 'all', admin: 'all' },
     why: 'El TPV necesita nombres para atribuir la venta, nunca los secretos.',
-    forbidden: ['pin_code', 'qr_token'] },
+    forbidden: ['pin_code', 'pin_hash', 'qr_token'] },
 
   { name: 'cantina_access', ...deny,
     read: { anon: 'none', client: 'none', pos: 'none', admin: 'all' },
     why: 'El admin gestiona el acceso de las barras, así que ve la ficha: si hay PIN configurado, '
-       + 'si está activo y cuándo se cambió. Lo que NO viaja nunca es el PIN. Decidido el '
-       + '2026-08-02: se guarda hasheado, y hashear y consultar son excluyentes — un hash no se '
-       + 'deshace. El admin no pierde control, porque es él quien lo fija: el panel enseña el '
-       + 'código UNA vez al generarlo y después sólo dice si está configurado. A cambio, una fuga '
-       + 'de la base ya no entrega los PIN de todas las cantinas.',
-    forbidden: ['pin_code'] },
+       + 'si está activo y cuándo se cambió. Lo que NO viaja nunca es el PIN. Se guarda hasheado, '
+       + 'y hashear y consultar son excluyentes — un hash no se deshace. El admin SIGUE ELIGIENDO '
+       + 'el código, tanto el de cantina como el de camarero (2026-08-03); lo único que pierde es '
+       + 'consultarlo después, y si se le olvida vuelve a fijarlo. A cambio, una fuga de la base '
+       + 'ya no entrega los PIN de todas las cantinas.',
+    forbidden: ['pin_code', 'pin_hash'] },
 
   { name: 'users', ...deny,
     read: { anon: 'none', client: 'none', pos: 'none', admin: 'none' } },

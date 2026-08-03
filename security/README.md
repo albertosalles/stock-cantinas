@@ -94,10 +94,23 @@ segundo. Es la razón por la que el ADR eligió el JWT propio: `postgres_changes
 aplica RLS con el token de la conexión, así que esto sólo puede quedar en verde
 si la identidad viaja en el token.
 
-## Dos falsos verdes que ya nos ha ahorrado
+## Progreso
+
+| Hito | Verde | Total | |
+|---|---:|---:|---|
+| S1 · línea base (2026-07-31) | 32 | 325 | 9,8 % |
+| S2 · credenciales fuera del navegador (2026-08-03) | 39 | 327 | 11,9 % |
+
+El salto de S2 son exactamente las **7 funciones de credenciales** cerradas a
+`anon`. El total sube a 327 porque aparecen `verify_cantina_pin` y
+`set_waiter_pin`.
+
+## Cuatro falsos verdes que ya nos ha ahorrado
 
 Merece la pena dejarlos escritos, porque son del mismo tipo que los tres fallos
-que en F1 sólo se vieron mirando la pantalla:
+que en F1 sólo se vieron mirando la pantalla — y porque **el propio banco de
+pruebas es lo primero de lo que hay que desconfiar**: un arnés de seguridad que
+se equivoca hacia el verde es peor que no tenerlo.
 
 1. **La primera versión de la prueba de Realtime sólo comprobaba la fuga**, no
    que el canal recibiera lo suyo. Salió **verde** en un sistema sin RLS
@@ -109,9 +122,26 @@ que en F1 sólo se vieron mirando la pantalla:
    token hay que ponerlo con `realtime.setAuth()`. Es exactamente el modo de
    fallo del punto 1: todo parecía correcto capa por capa.
 
+3. **La comprobación de RPC sacaba el universo de funciones de la lista de
+   concedidas**, así que una función bien revocada desaparecía del recuento en
+   vez de contar como verde. Justo después de cerrar siete funciones, el
+   marcador dijo «0 de 22 cerradas». Ahora se enumeran todas y se pregunta por
+   cada una.
+4. **`psql` imprime los booleanos como `true`/`false`, no como `t`/`f`.**
+   Compararlos con `'t'` daba siempre falso y la sección entera salió verde:
+   **29 de 29 funciones «cerradas»** cuando sólo se habían cerrado siete, y el
+   marcador global subió de 32 a 61 sin que nada hubiera mejorado. Ahora se
+   normaliza el valor y se **aborta** ante cualquier cosa inesperada, antes que
+   volver a inventarse un verde.
+
 Además, tras `supabase db reset` el contenedor de Realtime rehace su slot de
 replicación y tarda unos segundos en entregar; el runner reintenta para que eso
 no se confunda con un hallazgo de seguridad.
+
+> Los cuatro comparten forma: **la comprobación no podía observar lo que decía
+> observar**, y el fallo caía siempre del lado tranquilizador. De ahí la regla
+> que se ha ido aplicando: cuando una sección salte a verde de golpe, comprobar
+> a mano un caso antes de creérselo.
 
 ## Qué épica pone verde cada sección
 

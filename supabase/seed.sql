@@ -59,15 +59,17 @@ insert into public.event_products (event_id, product_id, price_cents, active, lo
 
 -- Un camarero por cantina. Cada uno trabaja con su dispositivo personal
 -- (decidido el 2026-07-31), así que el token identifica a la persona.
-insert into public.waiters (id, name, surname, active, qr_token, pin_code) values
-  ('3a17e000-0000-4000-8000-00000000000a', 'Ana',  'Norte', true, 'a1000000-0000-4000-8000-00000000000a', '1111'),
-  ('3a17e000-0000-4000-8000-00000000000b', 'Bruno', 'Sur',  true, 'b1000000-0000-4000-8000-00000000000b', '2222');
+insert into public.waiters (id, name, surname, active, qr_token, pin_hash) values
+  ('3a17e000-0000-4000-8000-00000000000a', 'Ana',  'Norte', true, 'a1000000-0000-4000-8000-00000000000a',
+   extensions.crypt('1111', extensions.gen_salt('bf'))),
+  ('3a17e000-0000-4000-8000-00000000000b', 'Bruno', 'Sur',  true, 'b1000000-0000-4000-8000-00000000000b',
+   extensions.crypt('2222', extensions.gen_salt('bf')));
 
--- PIN en claro, igual que en producción: la matriz debe demostrar que hoy
--- cualquiera los lee, y que tras S2/S5 ya no.
-insert into public.cantina_access (cantina_id, pin_code, is_active) values
-  ('ca00a000-0000-4000-8000-00000000000a', '1234', true),
-  ('ca00b000-0000-4000-8000-00000000000b', '5678', true);
+-- Credenciales hasheadas (S2). Los códigos son 1234 y 5678, fijos para poder
+-- probar el login desde el runner; lo que se guarda es su hash.
+insert into public.cantina_access (cantina_id, pin_hash, is_active) values
+  ('ca00a000-0000-4000-8000-00000000000a', extensions.crypt('1234', extensions.gen_salt('bf')), true),
+  ('ca00b000-0000-4000-8000-00000000000b', extensions.crypt('5678', extensions.gen_salt('bf')), true);
 
 insert into public.shifts (waiter_id, cantina_id, event_id) values
   ('3a17e000-0000-4000-8000-00000000000a', 'ca00a000-0000-4000-8000-00000000000a', 'e7e70000-0000-4000-8000-000000000001'),

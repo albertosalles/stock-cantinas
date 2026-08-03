@@ -188,29 +188,42 @@ async function checkWrite(table, role, op, rule) {
 
 // ─── Privilegios EXECUTE sobre las RPC ───────────────────────────────────────
 function checkRpcGrants() {
+  // Se enumeran TODAS las funciones y se pregunta por cada una. La primera
+  // versión sacaba el universo de la propia lista de concedidas, así que una
+  // función bien revocada desaparecía del recuento en vez de contar como
+  // verde: el marcador decía «0 de 22 cerradas» justo después de cerrar siete.
   const salida = execSync(
-    `psql "${DB_URL}" -At -c "select p.proname||'|'||r.rolname from pg_proc p ` +
-    `join pg_namespace n on n.oid=p.pronamespace ` +
-    `cross join (select unnest(array['anon','authenticated']) as rolname) r ` +
-    `where n.nspname='public' and has_function_privilege(r.rolname, p.oid, 'EXECUTE') order by 1;"`,
+    `psql "${DB_URL}" -At -c "select p.proname || '|' ` +
+    `|| has_function_privilege('anon', p.oid, 'EXECUTE') || '|' ` +
+    `|| has_function_privilege('authenticated', p.oid, 'EXECUTE') ` +
+    `from pg_proc p join pg_namespace n on n.oid = p.pronamespace ` +
+    `where n.nspname = 'public' order by 1;"`,
     { encoding: 'utf8' },
   );
-  const concedidas = new Set(salida.trim().split('\n').filter(Boolean));
-  const resultados = [];
 
-  // `anon` no debe poder ejecutar NADA: ni siquiera el login, que pasa a
-  // rutas de servidor con service_role en S2.
-  const todas = [...new Set([...salida.trim().split('\n')].map((l) => l.split('|')[0]))];
-  for (const fn of todas) {
-    const anonPuede = concedidas.has(`${fn}|anon`);
+  // `anon` no debe poder ejecutar NADA: ni siquiera el login, que pasa a rutas
+  // de servidor con service_role en S2.
+  // psql imprime los booleanos como `true`/`false`, no como `t`/`f`. Compararlos
+  // con `t` daba siempre falso y la sección entera salía verde: 29 de 29
+  // funciones «cerradas» cuando sólo se habían cerrado siete. Se normaliza y se
+  // aborta ante cualquier valor inesperado, antes que volver a inventarse un
+  // verde.
+  const aBooleano = (v, fn) => {
+    if (v === 'true' || v === 't') return true;
+    if (v === 'false' || v === 'f') return false;
+    throw new Error(`Privilegio ilegible para ${fn}: "${v}"`);
+  };
+
+  return salida.trim().split('\n').filter(Boolean).map((linea) => {
+    const [fn, anonPuede] = linea.split('|');
+    const abierto = aBooleano(anonPuede, fn);
     const soloServidor = RPC_SOLO_SERVIDOR.includes(fn);
-    resultados.push({
+    return {
       fn, role: 'anon',
-      ok: !anonPuede,
-      detail: anonPuede ? (soloServidor ? 'PERMITIDO (debe ser sólo de servidor)' : 'PERMITIDO') : 'denegado',
-    });
-  }
-  return resultados;
+      ok: !abierto,
+      detail: abierto ? (soloServidor ? 'PERMITIDO (debe ser sólo de servidor)' : 'PERMITIDO') : 'denegado',
+    };
+  });
 }
 
 // ─── Suplantación: lo que el RLS NO puede arreglar ───────────────────────────
