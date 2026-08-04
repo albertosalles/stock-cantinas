@@ -202,5 +202,21 @@ no se confunda con un hallazgo de seguridad.
 | Escritura · retirada de `GRANT` | S5 |
 | Realtime | S5 |
 
-Cuando todo esté en verde, la tabla de esta página es el cuerpo de
-**INF-7 · Línea base de seguridad**.
+La tabla de esta página es el cuerpo de **INF-7 · Línea base de seguridad**,
+publicado el 2026-08-04 al cerrar la fase.
+
+## Qué NO cubre esta matriz
+
+Conviene tenerlo escrito para que el verde no se lea como más de lo que es:
+
+- **La aserción biométrica de S6.** Se comprueban los caminos de error de las
+  rutas de WebAuthn, pero la firma real necesita un autenticador de plataforma y
+  HTTPS con dominio: no se puede ejercitar ni en local por IP ni en un navegador
+  headless. Hay que probarlo a mano en un móvil.
+- **El rol `client`.** Está declarado en el contrato y sin políticas propias, a
+  la espera de F2.5. Hoy no ve nada, que es el defecto correcto, pero eso no es
+  lo mismo que estar diseñado.
+- **El coste de las políticas bajo carga.** Las del ledger llaman a funciones
+  por fila. A los volúmenes de F1.5 no se observó degradación, pero no se ha
+  medido con el banco de pruebas.
+- **Producción.** Todo esto está verificado contra el stack local.
