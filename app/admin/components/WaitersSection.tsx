@@ -11,9 +11,30 @@ interface WaitersSectionProps {
   loading: boolean;
   onCreate: (name: string, surname: string, pin: string) => Promise<void>;
   onToggleActive: (id: string, active: boolean) => Promise<void>;
+  onSetPin: (id: string, pin: string) => Promise<void>;
 }
 
-export default function WaitersSection({ waiters, loading, onCreate, onToggleActive }: WaitersSectionProps) {
+export default function WaitersSection({ waiters, loading, onCreate, onToggleActive, onSetPin }: WaitersSectionProps) {
+  // Cambio de PIN en línea. No hay «ver el PIN» porque no existe: se guarda
+  // hasheado, así que la única operación posible es fijar uno nuevo.
+  const [editandoPin, setEditandoPin] = useState<string | null>(null);
+  const [pinNuevo, setPinNuevo] = useState('');
+  const [guardandoPin, setGuardandoPin] = useState(false);
+
+  const guardarPin = async (id: string) => {
+    if (guardandoPin) return;
+    setGuardandoPin(true);
+    try {
+      await onSetPin(id, pinNuevo);
+      setEditandoPin(null);
+      setPinNuevo('');
+    } catch (e: any) {
+      alert(e.message || 'No se pudo cambiar el PIN');
+    } finally {
+      setGuardandoPin(false);
+    }
+  };
+
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
@@ -154,10 +175,42 @@ export default function WaitersSection({ waiters, loading, onCreate, onToggleAct
                           consultar. Se indica sólo si lo tiene configurado; si
                           se olvida, se vuelve a fijar. */}
                       <td className="px-4 py-3 text-center text-[12.5px] font-semibold text-elche-text-light">
-                        {w.has_pin ? (
-                          <span title="Tiene PIN personal configurado">••••</span>
+                        {editandoPin === w.id ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <input
+                              autoFocus
+                              value={pinNuevo}
+                              onChange={e => setPinNuevo(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') guardarPin(w.id); if (e.key === 'Escape') setEditandoPin(null); }}
+                              placeholder="Nuevo PIN"
+                              className="w-[86px] rounded-[8px] border border-[#e0efe7] bg-[#f9fcfb] px-2 py-1.5 text-center text-[12.5px] outline-none focus:border-elche-primary focus:bg-white"
+                            />
+                            <button
+                              onClick={() => guardarPin(w.id)}
+                              disabled={guardandoPin}
+                              title="Guardar"
+                              className="flex h-[28px] w-[28px] items-center justify-center rounded-[8px] bg-elche-primary text-white disabled:opacity-60"
+                            >
+                              <span className="ms text-[16px]">check</span>
+                            </button>
+                            <button
+                              onClick={() => { setEditandoPin(null); setPinNuevo(''); }}
+                              title="Cancelar"
+                              className="flex h-[28px] w-[28px] items-center justify-center rounded-[8px] border border-[#e0efe7] text-[#8aa397]"
+                            >
+                              <span className="ms text-[16px]">close</span>
+                            </button>
+                          </div>
                         ) : (
-                          <span title="Sólo puede entrar con su QR">—</span>
+                          <button
+                            onClick={() => { setEditandoPin(w.id); setPinNuevo(''); }}
+                            title={w.has_pin
+                              ? 'Tiene PIN. No se puede consultar (se guarda cifrado): pulsa para poner uno nuevo.'
+                              : 'Sin PIN: sólo entra con su QR. Pulsa para asignarle uno.'}
+                            className="rounded-[8px] px-2 py-1 transition-colors hover:bg-elche-primary/10 hover:text-elche-primary"
+                          >
+                            {w.has_pin ? '••••' : '—'}
+                          </button>
                         )}
                       </td>
                       <td className="py-3 pl-4 pr-5">

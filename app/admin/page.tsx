@@ -135,6 +135,7 @@ export default function AdminHome() {
             loading={waitersApi.loading}
             onCreate={waitersApi.createWaiter}
             onToggleActive={waitersApi.toggleActive}
+            onSetPin={waitersApi.cambiarPin}
           />
         )}
       </div>

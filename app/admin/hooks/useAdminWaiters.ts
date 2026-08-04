@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { createWaiter as altaCamarero } from '@/lib/adminPins';
+import { createWaiter as altaCamarero, setWaiterPin } from '@/lib/adminPins';
 import { adminOp } from '@/lib/adminData';
 
 export interface WaiterRow {
@@ -59,5 +59,16 @@ export function useAdminWaiters() {
 
   useEffect(() => { fetchWaiters(); }, []);
 
-  return { waiters, loading, fetchWaiters, createWaiter, toggleActive };
+  /**
+   * Cambia el PIN personal. Es la ÚNICA salida cuando un camarero olvida el
+   * suyo: desde S2 el PIN se guarda hasheado y no se puede consultar, así que
+   * no hay «recordármelo», sólo «pon uno nuevo». Con el PIN vacío se le quita
+   * y entonces sólo entra con su QR.
+   */
+  async function cambiarPin(id: string, pin: string) {
+    await setWaiterPin(id, pin);
+    await fetchWaiters();
+  }
+
+  return { waiters, loading, fetchWaiters, createWaiter, toggleActive, cambiarPin };
 }
