@@ -28,8 +28,16 @@ export function rpID(): string {
   return new URL(url).hostname;
 }
 
+/**
+ * Origen esperado en la verificación. El navegador lo manda SIN barra final y
+ * sin ruta, así que la comparación es exacta y un `https://dominio/` copiado
+ * del navegador bastaría para que toda aserción fuera rechazada — con un error
+ * que no dice nada sobre la barra. Se normaliza aquí en vez de confiar en cómo
+ * se haya escrito la variable de entorno.
+ */
 export function origen(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  const url = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
+  return new URL(url).origin;
 }
 
 export const NOMBRE_APP = 'Stock Cantinas';
