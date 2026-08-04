@@ -19,9 +19,14 @@ import { signCantinaGrant } from '@/lib/authToken';
  * Cantinas de un evento en vivo, para la pantalla de login.
  *
  * Va por aquí y no leyendo `v_available_cantinas` desde el navegador porque esa
- * vista dice además si la barra tiene credenciales y si están activas: metadato
- * de acceso que el contrato reserva al admin. Aquí sólo salen nombre y
- * ubicación, que es lo que hay escrito en el cartel de la barra.
+ * vista se lee con `service_role` y el contrato la reserva al servidor.
+ *
+ * SÍ devuelve si la barra tiene credenciales y si están activas, porque la
+ * pantalla necesita saber cuáles se pueden elegir. Al quitarlas en S3 —creyendo
+ * que eran metadato sensible— el selector pasó a mostrar TODAS las cantinas
+ * como «Sin credenciales» y deshabilitadas, y nadie podía entrar. Son dos
+ * booleanos: no dicen cuál es el PIN, sólo si esa barra está operativa, que es
+ * lo mismo que se averigua intentando entrar.
  */
 export async function GET(request: Request) {
   const eventId = new URL(request.url).searchParams.get('eventId');
@@ -30,7 +35,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await supabaseAdmin()
       .from('v_available_cantinas')
-      .select('event_id, event_name, cantina_id, cantina_name, cantina_location')
+      .select('event_id, event_name, cantina_id, cantina_name, cantina_location, has_credentials, access_enabled')
       .eq('event_id', eventId);
     if (error) throw error;
     return NextResponse.json({ cantinas: data ?? [] });

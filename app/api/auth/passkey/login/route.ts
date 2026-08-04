@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   // ─── Paso 1: opciones ───
   if (cuerpo.paso === 'opciones') {
     const opciones = await generateAuthenticationOptions({
-      rpID: rpID(),
+      rpID: rpID(request),
       userVerification: 'required',
       // Sin allowCredentials: el dispositivo enseña las suyas. Además de ser
       // más cómodo, evita que la respuesta revele qué credenciales existen.
@@ -81,8 +81,8 @@ export async function POST(request: Request) {
     const resultado = await verifyAuthenticationResponse({
       response: cuerpo.respuesta,
       expectedChallenge: reto.reto,
-      expectedOrigin: origen(),
-      expectedRPID: rpID(),
+      expectedOrigin: origen(request),
+      expectedRPID: rpID(request),
       requireUserVerification: true,
       credential: {
         id: cred.credential_id as string,

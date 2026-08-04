@@ -19,25 +19,50 @@ export const COOKIE_RETO = 'sc_webauthn_reto';
 const TTL_RETO_SEGUNDOS = 5 * 60;
 
 /**
- * Dominio de la passkey. Tiene que ser el host sin puerto ni esquema, y una
- * credencial registrada en un dominio NO sirve en otro: si esto cambia entre
- * desarrollo y producción, las passkeys registradas dejan de funcionar.
+ * Origen desde el que se ha servido la página.
+ *
+ * WebAuthn no admite discrepancias: el `rpID` tiene que corresponder al origen
+ * real del navegador, y si no, el propio navegador rechaza la operación con
+ * «The RP ID … is invalid for this domain». Por eso se deriva de la petición y
+ * no de una variable de entorno, que era el diseño anterior: bastaba con que
+ * `NEXT_PUBLIC_APP_URL` no estuviera puesta en un entorno —una preview, por
+ * ejemplo— para que quedara el `localhost` de respaldo y la biometría fuera
+ * inusable ahí, sin más pista que ese mensaje.
+ *
+ * Derivarlo de la cabecera `Host` es seguro: aunque alguien la falsifique, el
+ * navegador sólo crea o usa una credencial cuyo `rpID` case con el origen que
+ * él mismo tiene cargado, así que un valor inventado no abre nada.
  */
-export function rpID(): string {
-  const url = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  return new URL(url).hostname;
+function origenDePeticion(request: Request): string | null {
+  const cabeceras = request.headers;
+  const origen = cabeceras.get('origin');
+  if (origen) return origen;
+
+  const host = cabeceras.get('x-forwarded-host') ?? cabeceras.get('host');
+  if (!host) return null;
+  const proto = cabeceras.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  return `${proto}://${host}`;
 }
 
 /**
- * Origen esperado en la verificación. El navegador lo manda SIN barra final y
- * sin ruta, así que la comparación es exacta y un `https://dominio/` copiado
- * del navegador bastaría para que toda aserción fuera rechazada — con un error
- * que no dice nada sobre la barra. Se normaliza aquí en vez de confiar en cómo
- * se haya escrito la variable de entorno.
+ * Origen esperado en la verificación. `NEXT_PUBLIC_APP_URL` sigue mandando
+ * cuando coincide con el host real —permite fijar un dominio propio—, pero no
+ * puede imponerse sobre él: si no casan, la operación fallaría igualmente.
  */
-export function origen(): string {
-  const url = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-  return new URL(url).origin;
+export function origen(request: Request): string {
+  const real = origenDePeticion(request);
+  const configurado = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (configurado) {
+    const fijado = new URL(configurado).origin;
+    if (!real || fijado === real) return fijado;
+  }
+  return real ?? 'http://localhost:3000';
+}
+
+/** Dominio de la passkey: el host, sin puerto ni esquema. */
+export function rpID(request: Request): string {
+  return new URL(origen(request)).hostname;
 }
 
 export const NOMBRE_APP = 'Stock Cantinas';

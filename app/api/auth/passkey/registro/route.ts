@@ -69,7 +69,7 @@ export async function POST(request: Request) {
 
     const opciones = await generateRegistrationOptions({
       rpName: NOMBRE_APP,
-      rpID: rpID(),
+      rpID: rpID(request),
       userName: quien.nombre,
       userID: new TextEncoder().encode(`${quien.tipo}:${quien.id}`),
       userDisplayName: quien.nombre,
@@ -111,8 +111,8 @@ export async function POST(request: Request) {
       const resultado = await verifyRegistrationResponse({
         response: cuerpo.respuesta as any,
         expectedChallenge: reto.reto,
-        expectedOrigin: origen(),
-        expectedRPID: rpID(),
+        expectedOrigin: origen(request),
+        expectedRPID: rpID(request),
         requireUserVerification: true,
       });
 
