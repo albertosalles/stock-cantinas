@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { createWaiter as altaCamarero } from '@/lib/adminPins';
+import { adminOp } from '@/lib/adminData';
 
 export interface WaiterRow {
   id: string;
@@ -7,7 +9,8 @@ export interface WaiterRow {
   surname: string | null;
   active: boolean;
   qr_token: string;
-  pin_code: string | null;
+  /** Si tiene PIN personal. El código NO viaja: se guarda hasheado (S2). */
+  has_pin: boolean;
   /** Horas imputadas en turnos cerrados */
   total_hours: number;
   /** true si tiene un turno abierto ahora mismo */
@@ -21,7 +24,7 @@ export function useAdminWaiters() {
   async function fetchWaiters() {
     setLoading(true);
     const [wRes, sRes] = await Promise.all([
-      supabase.from('waiters').select('id, name, surname, active, qr_token, pin_code').order('name'),
+      supabase.rpc('get_waiters_admin'),
       supabase.from('shifts').select('waiter_id, hours, ended_at'),
     ]);
 
@@ -42,21 +45,15 @@ export function useAdminWaiters() {
 
   async function createWaiter(name: string, surname: string, pin: string) {
     if (!name.trim()) throw new Error('El nombre es obligatorio');
-    const { error } = await supabase.from('waiters').insert({
-      name: name.trim(),
-      surname: surname.trim() || null,
-      pin_code: pin.trim() || null,
-    });
-    if (error) {
-      if (error.code === '23505') throw new Error('Ese PIN ya está en uso por otro camarero');
-      throw error;
-    }
+    // Alta y PIN en una sola transacción de servidor. El PIN se guarda
+    // hasheado, y la comprobación de duplicados recorre los hashes porque el
+    // índice único sobre el texto ya no existe.
+    await altaCamarero(name, surname, pin);
     await fetchWaiters();
   }
 
   async function toggleActive(id: string, active: boolean) {
-    const { error } = await supabase.from('waiters').update({ active }).eq('id', id);
-    if (error) throw error;
+    await adminOp('camarero.activo', { id, active });
     setWaiters(ws => ws.map(w => w.id === id ? { ...w, active } : w));
   }
 

@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabaseClient';
+import { adminOp } from '@/lib/adminData';
 
 export interface Opponent {
   id: string;

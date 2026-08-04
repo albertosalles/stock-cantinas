@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLogin } from './hooks/useLogin';
 import EventSelector from './components/EventSelector';
@@ -9,6 +9,8 @@ import PinInput from './components/PinInput';
 import ScanStep from './components/ScanStep';
 import WaiterStep from './components/WaiterStep';
 import { DEV_EASY_LOGIN } from '@/lib/devConfig';
+import { setAccessToken } from '@/lib/session';
+import { hayBiometria, entrarConPasskey } from '@/lib/passkeys';
 
 /** Pasos del flujo de cantina, en el orden en que se recorren. */
 const QR_STEPS = [
@@ -47,6 +49,35 @@ export default function CantinaLoginPage() {
 
   // Acceso de administración (contraseña)
   const [mode, setMode] = useState<'cantina' | 'admin'>('cantina');
+  // ─── Acceso biométrico (S6) ───
+  // El botón sólo aparece si el dispositivo tiene autenticador de plataforma.
+  // No se puede saber desde aquí si ADEMÁS hay una passkey registrada: eso lo
+  // sabe el sistema operativo, y preguntárselo abriría el diálogo. Por eso el
+  // «no está registrado» se trata como un error normal, no como algo a evitar.
+  const [biometriaDisponible, setBiometriaDisponible] = useState(false);
+  const [bioLoading, setBioLoading] = useState(false);
+  const [bioError, setBioError] = useState('');
+
+  useEffect(() => { hayBiometria().then(setBiometriaDisponible); }, []);
+
+  const handleBiometria = async () => {
+    if (bioLoading) return;
+    setBioLoading(true);
+    setBioError('');
+    try {
+      const acceso = await entrarConPasskey();
+      router.push(acceso.rol === 'admin' ? '/admin' : '/pos');
+    } catch (e: any) {
+      // 409 no es un fallo: es que el camarero no tiene turno abierto, y la
+      // passkey acredita quién eres pero no en qué barra estás.
+      if (e?.status === 409) setBioError(e.message);
+      else if (e?.name === 'NotAllowedError') setBioError('Acceso biométrico cancelado');
+      else setBioError(e?.message || 'No se pudo entrar con el acceso biométrico');
+    } finally {
+      setBioLoading(false);
+    }
+  };
+
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState('');
@@ -57,14 +88,17 @@ export default function CantinaLoginPage() {
     setAdminError('');
 
     try {
-      const res = await fetch('/api/admin-login', {
+      const res = await fetch('/api/auth/admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: adminPassword }),
       });
 
       if (res.ok) {
-        sessionStorage.setItem('admin_authenticated', 'true');
+        // La cookie httpOnly la pone el servidor; aquí sólo se guarda el token
+        // que supabase-js necesita mandar en cada petición.
+        const { token } = await res.json();
+        setAccessToken(token);
         router.push('/admin');
       } else {
         const data = await res.json();
@@ -251,6 +285,23 @@ export default function CantinaLoginPage() {
 
         {/* ---------------- Pie ---------------- */}
         <div className="mt-5 flex flex-col items-center gap-2.5">
+          {biometriaDisponible && (
+            <>
+              <button
+                onClick={handleBiometria}
+                disabled={bioLoading}
+                className="flex w-full items-center justify-center gap-2 rounded-[var(--r-btn)] border border-[var(--c-primary)] bg-[var(--c-primary)] px-4 py-3 text-[13px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+              >
+                <span className="ms text-[19px]">fingerprint</span>
+                {bioLoading ? 'Comprobando…' : 'Entrar con Face ID o huella'}
+              </button>
+              {bioError && (
+                <p className="text-center text-[11.5px] font-semibold text-[var(--c-danger,#c0392b)]">
+                  {bioError}
+                </p>
+              )}
+            </>
+          )}
           {mode === 'cantina' && (
             <button
               onClick={() => { setMode('admin'); setAdminError(''); }}

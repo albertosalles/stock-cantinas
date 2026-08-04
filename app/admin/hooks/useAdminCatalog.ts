@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { adminOp } from '@/lib/adminData';
 
 export interface EventProductRow {
   id: string;
@@ -75,38 +76,25 @@ export function useAdminCatalog(eventId: string) {
     if (isNaN(priceNum) || priceNum < 0) throw new Error('Precio inválido');
     if (isNaN(thresholdNum) || thresholdNum < 0) throw new Error('Umbral inválido');
 
-    const { error } = await supabase
-      .from('event_products')
-      .update({
-        price_cents: Math.round(priceNum * 100),
-        low_stock_threshold: thresholdNum,
-        active: row.editActive,
-        featured: row.editFeatured
-      })
-      .eq('id', row.id);
-
-    if (error) throw error;
+    await adminOp('catalogo.guardar', {
+      id: row.id,
+      priceCents: Math.round(priceNum * 100),
+      threshold: thresholdNum,
+      active: row.editActive,
+      featured: row.editFeatured,
+    });
 
     // La categoría es intrínseca al producto global: se actualiza en `products`
     // (afecta al producto en todos los eventos).
     if ((row.editCategory || null) !== (row.category ?? null)) {
-      const { error: catError } = await supabase
-        .from('products')
-        .update({ category: row.editCategory || null })
-        .eq('id', row.product_id);
-      if (catError) throw catError;
+      await adminOp('producto.categoria', { id: row.product_id, category: row.editCategory || null });
     }
 
     await fetchCatalog();
   }
 
   async function deleteProduct(row: EventProductRow) {
-    const { error } = await supabase
-      .from('event_products')
-      .delete()
-      .eq('id', row.id);
-
-    if (error) throw error;
+    await adminOp('catalogo.quitar', { id: row.id });
     await fetchCatalog();
   }
 
@@ -117,27 +105,18 @@ export function useAdminCatalog(eventId: string) {
     if (isNaN(priceNum) || priceNum < 0) throw new Error('Precio inválido');
     if (isNaN(thresholdNum) || thresholdNum < 0) throw new Error('Umbral inválido');
 
-    const { error } = await supabase
-      .from('event_products')
-      .insert({
-        event_id: eventId,
-        product_id: productId,
-        price_cents: Math.round(priceNum * 100),
-        low_stock_threshold: thresholdNum,
-        active: active,
-      });
-
-    if (error) throw error;
+    await adminOp('catalogo.anadir', {
+      eventId, productId,
+      priceCents: Math.round(priceNum * 100),
+      threshold: thresholdNum,
+      active,
+    });
     await fetchCatalog();
   }
 
   async function createGlobalProduct(name: string, category?: string) {
     if (!name.trim()) throw new Error('Nombre requerido');
-    const { error } = await supabase.from('products').insert({
-      name: name.trim(),
-      category: category || null,
-    });
-    if (error) throw error;
+    await adminOp('producto.crear', { name, category: category || null });
     await fetchCatalog();
   }
 

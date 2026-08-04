@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { adminOp } from '@/lib/adminData';
+import { setCantinaPin } from '@/lib/adminPins';
 
 export interface CantinaRow {
   id: string;
@@ -42,9 +44,9 @@ export function useAdminCantinas(eventId: string) {
 
   async function toggleCantina(cantinaId: string, assign: boolean) {
     if (assign) {
-      await supabase.from('event_cantinas').insert({ event_id: eventId, cantina_id: cantinaId });
+      await adminOp('cantina.asignar', { eventId, cantinaId, asignar: true });
     } else {
-      await supabase.from('event_cantinas').delete().match({ event_id: eventId, cantina_id: cantinaId });
+      await adminOp('cantina.asignar', { eventId, cantinaId, asignar: false });
     }
     await fetchCantinas();
   }
@@ -53,27 +55,15 @@ export function useAdminCantinas(eventId: string) {
     if (!name.trim()) throw new Error('Nombre requerido');
     if (!pin.trim()) throw new Error('PIN requerido');
 
-    const { data, error } = await supabase
-      .from('cantinas')
-      .insert({ name: name.trim() })
-      .select('id')
-      .single();
+    const data = await adminOp<{ id: string }>('cantina.crear', { name });
 
-    if (error) throw error;
-
-    // Set PIN
-    const { error: pinError } = await supabase.rpc('set_cantina_pin', {
-      p_cantina_id: data.id,
-      p_pin_code: pin.trim(),
-      p_is_active: true
-    });
-
-    if (pinError) console.error('Error setting PIN:', pinError);
+    // El PIN se fija por ruta de servidor: set_cantina_pin está revocada al
+    // navegador desde S2. Si falla, la cantina quedaría sin credenciales, así
+    // que el error se propaga en vez de tragarse como antes.
+    await setCantinaPin(data.id, pin);
 
     // Auto-assign to current event
-    await supabase
-      .from('event_cantinas')
-      .insert({ event_id: eventId, cantina_id: data.id });
+    await adminOp('cantina.asignar', { eventId, cantinaId: data.id, asignar: true });
 
     await fetchCantinas();
   }

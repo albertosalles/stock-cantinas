@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import BotonRegistrarPasskey from '@/components/BotonRegistrarPasskey';
 
 export type PosTab = 'venta' | 'stock' | 'historial';
 
@@ -248,6 +249,9 @@ export default function PosShell({
                 </span>
               </button>
 
+              <div className="px-1 pb-2">
+                <BotonRegistrarPasskey />
+              </div>
               <button
                 onClick={onLogout}
                 className="flex w-full items-center gap-3 rounded-[13px] border-none bg-[var(--c-surface)] px-3.5 py-3 text-left transition-colors active:bg-[#fdeeee]"

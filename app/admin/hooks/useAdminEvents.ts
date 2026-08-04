@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { adminOp } from '@/lib/adminData';
 
 export interface EventRow {
   id: string;
@@ -66,32 +67,19 @@ export function useAdminEvents() {
 
     // Hora de inicio, rival y competición se guardan ya en el alta: son los
     // únicos datos del partido que no se pueden reconstruir después de jugarlo.
-    const { data, error } = await supabase
-      .from('events')
-      .insert({
-        name: name.trim(),
-        date: date || null,
-        season_id: seasonId || null,
-        kickoff_at: datos?.kickoffAt ?? null,
-        opponent_id: datos?.opponentId ?? null,
-        match_type: datos?.matchType ?? null,
-      })
-      .select('id, name, date, status, season_id')
-      .single();
-
-    if (error) throw error;
+    const data = await adminOp<any>('evento.crear', {
+      name, date, seasonId,
+      kickoffAt: datos?.kickoffAt ?? null,
+      opponentId: datos?.opponentId ?? null,
+      matchType: datos?.matchType ?? null,
+    });
 
     setEvents([{ ...(data as any), total_cents: 0, num_sales: 0, num_cantinas: 0 }, ...events]);
     return data;
   }
 
   async function updateEventStatus(eventId: string, newStatus: string) {
-    const { error } = await supabase
-      .from('events')
-      .update({ status: newStatus })
-      .eq('id', eventId);
-
-    if (error) throw error;
+    await adminOp('evento.estado', { id: eventId, status: newStatus });
 
     setEvents(events.map(e => e.id === eventId ? { ...e, status: newStatus } : e));
   }

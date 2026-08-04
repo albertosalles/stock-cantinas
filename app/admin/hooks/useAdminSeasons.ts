@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { adminOp } from '@/lib/adminData';
 
 export interface SeasonRow {
   id: string;
@@ -26,28 +27,19 @@ export function useAdminSeasons() {
 
   async function createSeason(name: string, startsOn?: string, endsOn?: string) {
     if (!name.trim()) throw new Error('Debe introducir un nombre');
-    const { error } = await supabase.from('seasons').insert({
-      name: name.trim(),
-      starts_on: startsOn || null,
-      ends_on: endsOn || null,
-    });
-    if (error) throw error;
+    await adminOp('temporada.crear', { name, startsOn, endsOn });
     await fetchSeasons();
   }
 
   /** Activa una temporada (desactivando la anterior; la BD garantiza una sola activa). */
   async function activateSeason(id: string) {
-    const { error: e1 } = await supabase.from('seasons').update({ active: false }).eq('active', true);
-    if (e1) throw e1;
-    const { error: e2 } = await supabase.from('seasons').update({ active: true, status: 'open' }).eq('id', id);
-    if (e2) throw e2;
+    await adminOp('temporada.activar', { id });
     await fetchSeasons();
   }
 
   /** Cierra una temporada (deja de estar activa y pasa a estado closed). */
   async function closeSeason(id: string) {
-    const { error } = await supabase.from('seasons').update({ active: false, status: 'closed' }).eq('id', id);
-    if (error) throw error;
+    await adminOp('temporada.cerrar', { id });
     await fetchSeasons();
   }
 

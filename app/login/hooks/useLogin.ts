@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import {
-  parseQr, resolveCantinaQr, identifyWaiter, openShift,
+  parseQr, resolveCantinaQr, validateCantinaPin, startPosSession,
   CantinaAccess,
 } from '@/lib/waiters';
+import { setAccessToken } from '@/lib/session';
 import { DEV_EASY_LOGIN } from '@/lib/devConfig';
 
 export type ActiveWaiter = { id: string; name: string };
@@ -44,6 +45,9 @@ export function useLogin() {
 
   // Acceso a cantina resuelto (por QR o por flujo manual), pendiente de identificar camarero
   const [pendingAccess, setPendingAccess] = useState<CantinaAccess | null>(null);
+  // Vale firmado por el servidor que acredita esa cantina. Sin él, el paso 2 no
+  // emite token: es lo que impide pedir sesión para una barra cuyo PIN no se sabe.
+  const [vale, setVale] = useState<string | null>(null);
 
   // [DEV] Listado de camareros activos para el login simplificado
   const [activeWaiters, setActiveWaiters] = useState<ActiveWaiter[]>([]);
@@ -79,13 +83,13 @@ export function useLogin() {
 
   async function loadCantinas(eventId: string) {
     try {
-      const { data, error } = await supabase
-        .from('v_available_cantinas')
-        .select('*')
-        .eq('event_id', eventId);
-
-      if (error) throw error;
-      setCantinas(data || []);
+      // Por ruta de servidor: v_available_cantinas dice también si la barra
+      // tiene credenciales y si están activas, y eso es del admin. Aquí sólo
+      // hacen falta el nombre y la ubicación.
+      const res = await fetch(`/api/auth/cantina?eventId=${encodeURIComponent(eventId)}`);
+      const datos = await res.json();
+      if (!res.ok) throw new Error(datos.error ?? 'Error');
+      setCantinas(datos.cantinas ?? []);
     } catch (e: any) {
       console.error('Error loading cantinas:', e);
       setError('No se pudieron cargar las cantinas');
@@ -107,12 +111,13 @@ export function useLogin() {
     setLoading(true);
     setError('');
     try {
-      const access = await resolveCantinaQr(token);
-      if (!access) {
+      const grant = await resolveCantinaQr(token);
+      if (!grant) {
         setError('QR no válido o la cantina no tiene ningún evento en vivo');
         return;
       }
-      setPendingAccess(access);
+      setPendingAccess(grant.acceso);
+      setVale(grant.vale);
       setStep('waiter');
     } catch (e: any) {
       console.error('QR cantina error:', e);
@@ -122,30 +127,22 @@ export function useLogin() {
     }
   }
 
-  // Abre turno, persiste la sesión y entra al POS
-  async function startSession(waiterId: string, waiterName: string) {
-    if (!pendingAccess) return;
-    const shiftId = await openShift(waiterId, pendingAccess.eventId, pendingAccess.cantinaId);
-    localStorage.setItem('cantina_session', JSON.stringify({
-      eventId: pendingAccess.eventId,
-      eventName: pendingAccess.eventName,
-      cantinaId: pendingAccess.cantinaId,
-      cantinaName: pendingAccess.cantinaName,
-      waiterId,
-      waiterName,
-      shiftId,
-      loginTime: new Date().toISOString(),
-    }));
+  // Persiste la sesión y entra al POS. El turno lo abre el servidor al emitir
+  // el token, en la misma operación: así no queda un token sin turno si falla
+  // algo por el camino.
+  function guardarSesion(token: string, sesion: Record<string, unknown>) {
+    setAccessToken(token);
+    localStorage.setItem('cantina_session', JSON.stringify(sesion));
     router.push('/pos');
   }
 
   // ─── Paso 'waiter': identificación personal (QR de acreditación o PIN personal) ───
   async function handleWaiterIdentify(opts: { qrText?: string; pin?: string }) {
-    if (!pendingAccess || loading) return;
+    if (!pendingAccess || !vale || loading) return;
     setLoading(true);
     setError('');
     try {
-      let identity = null;
+      let qrToken: string | undefined;
       if (opts.qrText !== undefined) {
         const { kind, token } = parseQr(opts.qrText);
         if (kind === 'cantina') {
@@ -156,17 +153,11 @@ export function useLogin() {
           setError('Código QR no reconocido');
           return;
         }
-        identity = await identifyWaiter({ qrToken: token });
-      } else if (opts.pin) {
-        identity = await identifyWaiter({ pin: opts.pin });
+        qrToken = token;
       }
 
-      if (!identity) {
-        setError('Camarero no encontrado o desactivado');
-        return;
-      }
-
-      await startSession(identity.waiterId, identity.waiterName);
+      const { token, sesion } = await startPosSession({ vale, qrToken, pin: opts.pin });
+      guardarSesion(token, sesion);
     } catch (e: any) {
       console.error('Waiter identify error:', e);
       setError(e.message || 'Error al identificar al camarero');
@@ -175,13 +166,15 @@ export function useLogin() {
     }
   }
 
-  // [DEV] Login directo eligiendo camarero de la lista (sin QR ni PIN)
-  async function loginAsWaiter(waiterId: string, waiterName: string) {
-    if (!pendingAccess || loading) return;
+  // [DEV] Login directo eligiendo camarero de la lista (sin QR ni PIN).
+  // El servidor vuelve a comprobar el entorno antes de aceptarlo.
+  async function loginAsWaiter(waiterId: string, _waiterName: string) {
+    if (!pendingAccess || !vale || loading) return;
     setLoading(true);
     setError('');
     try {
-      await startSession(waiterId, waiterName);
+      const { token, sesion } = await startPosSession({ vale, waiterId });
+      guardarSesion(token, sesion);
     } catch (e: any) {
       console.error('Dev login error:', e);
       setError(e.message || 'Error al iniciar sesión');
@@ -198,20 +191,25 @@ export function useLogin() {
     setStep('cantina');
   }
 
-  function selectCantina(cantina: Cantina) {
+  async function selectCantina(cantina: Cantina) {
     setSelectedCantina(cantina);
     setError('');
-    if (DEV_EASY_LOGIN) {
-      // Saltamos el PIN de cantina: acceso directo a la identificación de camarero
-      setPendingAccess({
-        eventId: cantina.event_id,
-        eventName: cantina.event_name,
-        cantinaId: cantina.cantina_id,
-        cantinaName: cantina.cantina_name,
-      });
-      setStep('waiter');
-    } else {
+    if (!DEV_EASY_LOGIN) {
       setStep('pin');
+      return;
+    }
+    // En dev se salta el PIN, pero el vale lo sigue firmando el servidor: es él
+    // quien decide si el atajo está permitido en este entorno.
+    setLoading(true);
+    try {
+      const grant = await validateCantinaPin(cantina.event_id, cantina.cantina_id, '');
+      setPendingAccess(grant.acceso);
+      setVale(grant.vale);
+      setStep('waiter');
+    } catch (e: any) {
+      setError(e.message || 'No se pudo acceder a la cantina');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -222,6 +220,7 @@ export function useLogin() {
 
   function goBack() {
     setError('');
+    setVale(null);
     if (step === 'waiter') {
       setPendingAccess(null);
       // En dev volvemos a la selección de cantina; en producción, al escáner
@@ -245,31 +244,14 @@ export function useLogin() {
     setError('');
 
     try {
-      const { data, error } = await supabase.rpc('validate_cantina_access', {
-        p_event_id: selectedEvent.id,
-        p_cantina_id: selectedCantina.cantina_id,
-        p_pin_code: pin
-      });
-
-      if (error) throw error;
-
-      const result = data[0];
-
-      if (result.success) {
-        // El acceso a la cantina está validado: falta identificar al camarero
-        setPendingAccess({
-          eventId: selectedEvent.id,
-          eventName: result.event_name,
-          cantinaId: selectedCantina.cantina_id,
-          cantinaName: result.cantina_name,
-        });
-        setStep('waiter');
-      } else {
-        setError(result.message || 'Acceso denegado');
-      }
+      const grant = await validateCantinaPin(selectedEvent.id, selectedCantina.cantina_id, pin);
+      // El acceso a la cantina está validado: falta identificar al camarero
+      setPendingAccess(grant.acceso);
+      setVale(grant.vale);
+      setStep('waiter');
     } catch (e: any) {
       console.error('Login error:', e);
-      setError(e.message || 'Error al iniciar sesión');
+      setError(e.message || 'Acceso denegado');
     } finally {
       setLoading(false);
     }

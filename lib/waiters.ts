@@ -37,35 +37,68 @@ export function parseQr(text: string): { kind: 'cantina' | 'waiter' | 'unknown';
   return { kind: 'unknown', token: '' };
 }
 
-// ─── RPCs ───
+// ─── Acceso ───
+// Desde S2 el login NO habla con la base de datos: las funciones de
+// credenciales están revocadas a `anon` y `authenticated`, y quien las ejecuta
+// es `service_role` desde las rutas de servidor. El navegador ya no puede
+// preguntarle a Postgres si un PIN es correcto, que era justo el problema.
 
-/** Resuelve el QR de una cantina → cantina + evento en vivo. null si no hay evento live. */
-export async function resolveCantinaQr(qrToken: string): Promise<CantinaAccess | null> {
-  const { data, error } = await supabase.rpc('resolve_cantina_qr', { p_qr_token: qrToken });
-  if (error) throw error;
-  const row = data?.[0];
-  if (!row) return null;
-  return {
-    cantinaId: row.cantina_id,
-    cantinaName: row.cantina_name,
-    eventId: row.event_id,
-    eventName: row.event_name,
-  };
-}
+/** Vale de diez minutos que acredita la cantina. Sólo sirve para el paso 2. */
+export type CantinaGrant = { acceso: CantinaAccess; vale: string };
 
-/** Identifica a un camarero por su QR personal o su PIN. null si no existe o está inactivo. */
-export async function identifyWaiter(opts: { qrToken?: string; pin?: string }): Promise<WaiterIdentity | null> {
-  const { data, error } = await supabase.rpc('identify_waiter', {
-    p_qr_token: opts.qrToken ?? null,
-    p_pin: opts.pin ?? null,
+/** Sesión completa devuelta al identificarse el camarero. */
+export type PosSession = {
+  eventId: string; eventName: string;
+  cantinaId: string; cantinaName: string;
+  waiterId: string; waiterName: string;
+  shiftId: string; loginTime: string;
+};
+
+async function postJson<T>(url: string, cuerpo: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cuerpo),
   });
-  if (error) throw error;
-  const row = data?.[0];
-  if (!row) return null;
-  return { waiterId: row.waiter_id, waiterName: row.waiter_name };
+  const datos = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(datos.error ?? 'Error de acceso');
+  return datos as T;
 }
 
-/** Abre turno (cierra el anterior si estaba en otra cantina). Devuelve el id del turno. */
+/** Paso 1 por QR del cartel de la barra. null si el QR no vale o no hay evento en vivo. */
+export async function resolveCantinaQr(qrToken: string): Promise<CantinaGrant | null> {
+  try {
+    return await postJson<CantinaGrant>('/api/auth/cantina', { qrToken });
+  } catch (e) {
+    if (e instanceof Error && e.message.includes('QR no válido')) return null;
+    throw e;
+  }
+}
+
+/** Paso 1 por evento + cantina + PIN. */
+export async function validateCantinaPin(
+  eventId: string, cantinaId: string, pin: string,
+): Promise<CantinaGrant> {
+  return postJson<CantinaGrant>('/api/auth/cantina', { eventId, cantinaId, pin });
+}
+
+/**
+ * Paso 2: identifica a la persona y devuelve el token de acceso más la sesión.
+ * La cantina y el evento salen del vale, NO de lo que mande el navegador.
+ */
+export async function startPosSession(opts: {
+  vale: string; qrToken?: string; pin?: string; waiterId?: string;
+}): Promise<{ token: string; sesion: PosSession }> {
+  return postJson<{ token: string; sesion: PosSession }>('/api/auth/waiter', opts);
+}
+
+/**
+ * Abre turno (cierra el anterior si estaba en otra cantina). Devuelve su id.
+ *
+ * El TPV ya NO llama aquí: su turno lo abre el servidor al emitir el token, en
+ * la misma operación, para que no quede un token sin turno si algo falla por el
+ * camino. Esto lo usa el admin al asignar camareros a una barra desde el panel.
+ */
 export async function openShift(waiterId: string, eventId: string, cantinaId: string): Promise<string> {
   const { data, error } = await supabase.rpc('open_shift', {
     p_waiter_id: waiterId,

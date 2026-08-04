@@ -150,8 +150,15 @@ export default function WaitersSection({ waiters, loading, onCreate, onToggleAct
                       <td className="px-4 py-3 text-right text-[13.5px] font-semibold tabular-nums text-elche-text-light">
                         {w.total_hours.toFixed(1)} h
                       </td>
-                      <td className="px-4 py-3 text-center text-[12.5px] font-semibold tabular-nums text-elche-text-light">
-                        {w.pin_code ?? '—'}
+                      {/* El PIN se guarda hasheado desde S2 y no se puede
+                          consultar. Se indica sólo si lo tiene configurado; si
+                          se olvida, se vuelve a fijar. */}
+                      <td className="px-4 py-3 text-center text-[12.5px] font-semibold text-elche-text-light">
+                        {w.has_pin ? (
+                          <span title="Tiene PIN personal configurado">••••</span>
+                        ) : (
+                          <span title="Sólo puede entrar con su QR">—</span>
+                        )}
                       </td>
                       <td className="py-3 pl-4 pr-5">
                         <div className="flex items-center justify-end gap-2">
